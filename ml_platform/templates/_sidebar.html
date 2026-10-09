@@ -1,0 +1,36 @@
+{# _sidebar.html — 左侧导航栏（被 layout.html include） #}
+<aside class="app-sidebar" id="app-sidebar">
+    <a class="sidebar-brand" href="/data/">
+        <span class="brand-mark"><i class="bi bi-activity"></i></span>
+        MLPlatform
+    </a>
+
+    <div class="sidebar-section">工作流</div>
+    <ul class="sidebar-nav">
+        <li><a class="nav-link" href="/data/"><i class="bi bi-database"></i><span>数据管理</span></a></li>
+        <li><a class="nav-link" href="/dashboard/"><i class="bi bi-graph-up-arrow"></i><span>模型训练</span></a></li>
+        <li><a class="nav-link" href="/predict/"><i class="bi bi-cpu"></i><span>在线预测</span></a></li>
+        <li><a class="nav-link" href="/tasks/"><i class="bi bi-list-task"></i><span>任务追踪</span></a></li>
+        <li><a class="nav-link" href="/compare/"><i class="bi bi-bar-chart-line"></i><span>任务对比</span></a></li>
+        {% if request.session.info.name == 'admin' %}
+        <li><a class="nav-link" href="/backend/"><i class="bi bi-person-workspace"></i><span>后台总览</span></a></li>
+        {% endif %}
+        <li><a class="nav-link" href="/help/"><i class="bi bi-journal-text"></i><span>帮助文档</span></a></li>
+    </ul>
+
+    <div class="sidebar-footer">
+        <div class="sidebar-user">
+            <span class="avatar">{{ request.session.info.name|slice:":1" |default:"U" }}</span>
+            <div class="overflow-hidden">
+                <div class="user-name">{{ request.session.info.name }}</div>
+                <div class="user-role">{% if request.session.info.name == 'admin' %}管理员{% else %}成员{% endif %}</div>
+            </div>
+        </div>
+        <div class="footer-actions">
+            {% if request.session.info.name == 'admin' %}
+            <a href="/admin/list/"><i class="bi bi-people"></i> 账户</a>
+            {% endif %}
+            <a href="/logout/"><i class="bi bi-box-arrow-right"></i> 注销</a>
+        </div>
+    </div>
+</aside>

@@ -1,0 +1,256 @@
+{% extends 'layout.html' %}
+
+{% block title %}特征配置 · MLPlatform{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">特征配置</li>
+{% endblock %}
+
+{% block css %}
+<style>
+    .col-list { height: 280px; overflow-y: auto; border: 1px solid var(--gray-200); border-radius: var(--radius-sm); padding: var(--space-2); }
+    .col-item { padding: 5px 8px; margin: 2px 0; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-sm); transition: background var(--transition); }
+    .col-item:hover { background: var(--gray-100); }
+    .col-item.selected { background: var(--primary); color: #fff; }
+    .col-item.target { background: var(--danger); color: #fff; }
+    .col-item .dtype { font-size: 11px; opacity: 0.7; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="guide-card fade-in">
+    <div class="guide-icon"><i class="bi bi-sliders2-vertical"></i></div>
+    <div class="guide-body">
+        <p class="guide-title"><span class="guide-step">第 2 步</span>挑选参与训练的列</p>
+        <p class="guide-text">告诉模型你的数据里哪些列是<strong>输入特征</strong>（蓝色），哪一列是要预测的<strong>目标</strong>（红色，仅监督学习需要）。鼠标悬停每列可看到它的统计信息。配置好后点「保存配置」，进入下一步训练。</p>
+    </div>
+</div>
+
+<input type="hidden" id="dataset-id" value="{{ dataset_id }}">
+<div class="card">
+    <div class="card-header">
+        <span><i class="bi bi-sliders2-vertical header-icon me-2"></i>特征与预处理配置</span>
+        <a href="/data/" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>返回数据管理</a>
+    </div>
+    <div class="card-body">
+        <div class="row g-4">
+            <!-- 列信息 -->
+            <div class="col-lg-5">
+                <h6 class="fw-semibold mb-1">数据列 <small class="text-muted fw-normal">(点击选择)</small></h6>
+                <p class="text-muted mb-2" style="font-size:12px;">蓝色=特征列，红色=目标列，灰色=不使用</p>
+                <div class="mb-2 d-flex gap-2">
+                    <button class="btn btn-sm btn-ml" id="btn-select-all">全选特征</button>
+                    <button class="btn btn-sm btn-outline-secondary" id="btn-deselect-all">取消全选</button>
+                </div>
+                <div class="col-list" id="col-list"></div>
+            </div>
+
+            <!-- 配置区 -->
+            <div class="col-lg-4">
+                <h6 class="fw-semibold mb-2">预处理配置</h6>
+                <div class="form-group">
+                    <label class="form-label">缺失值填充策略</label>
+                    <select id="fill-strategy" class="form-control">
+                        <option value="median">中位数填充 (median)</option>
+                        <option value="mean">均值填充 (mean)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">数值缩放</label>
+                    <select id="scale-numeric" class="form-control">
+                        <option value="1">是 - StandardScaler</option>
+                        <option value="0">否</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">学习类型</label>
+                    <select id="task-type" class="form-control">
+                        <option value="supervised">监督学习</option>
+                        <option value="unsupervised">无监督学习</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 已选统计 -->
+            <div class="col-lg-3">
+                <h6 class="fw-semibold mb-2">已选配置</h6>
+                <div class="border rounded p-3" style="background:var(--gray-50);font-size:var(--text-sm);">
+                    <p class="mb-2">目标列: <strong id="selected-target" class="text-danger">未选择</strong></p>
+                    <p class="mb-2">特征列: <strong id="selected-features-count" class="text-tabular">0</strong> 个</p>
+                    <p class="mb-2">总行数: <strong id="row-count" class="text-tabular">-</strong></p>
+                    <p class="mb-0">缺失列: <strong id="missing-count" class="text-tabular">-</strong></p>
+                </div>
+            </div>
+        </div>
+        <hr>
+        <button class="btn btn-ml btn-lg" id="btn-save" disabled>保存配置并准备训练</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block js %}
+<script>
+var datasetId = $('#dataset-id').val();
+var allColumns = [];
+var allDtypes = {};
+var allMissing = {};
+var featureCols = [];
+var targetCol = null;
+var colStats = null;  // 缓存统计信息
+
+// 加载列信息
+$.get('/api/datasets/' + datasetId + '/columns/', function(resp){
+    if(resp.code !== 0){ showAlert(resp.msg); return; }
+    var d = resp.data;
+    allColumns = d.columns;
+    allDtypes = d.dtypes;
+    allMissing = d.missing_values;
+    $('#row-count').text(d.row_count || '-');
+    var missCols = 0;
+    $.each(allMissing, function(k,v){ if(v > 0) missCols++; });
+    $('#missing-count').text(missCols);
+
+    // 已有配置则恢复
+    if(d.current_config){
+        featureCols = d.current_config.feature_cols || [];
+        targetCol = d.current_config.target_col || null;
+        $('#fill-strategy').val(d.current_config.fill_strategy || 'median');
+        $('#scale-numeric').val(d.current_config.scale_numeric ? '1' : '0');
+        if(d.current_config.task_type) $('#task-type').val(
+            d.current_config.task_type === 'unsupervised' ? 'unsupervised' : 'supervised'
+        );
+    }
+
+    renderColumns();
+    updateSummary();
+});
+
+// 异步加载统计信息（不阻塞页面渲染）
+$.get('/api/datasets/' + datasetId + '/statistics/', function(resp){
+    if(resp.code === 0 && resp.data){
+        colStats = resp.data;
+        renderColumns();  // 刷新以激活 popover
+    }
+});
+
+function renderColumns(){
+    // 重渲染前先销毁旧 popover 实例，避免浮层挂在 body 上成为孤儿（点击/重渲染后卡死）
+    document.querySelectorAll('#col-list [data-bs-toggle="popover"]').forEach(function(el){
+        var inst = bootstrap.Popover.getInstance(el);
+        if(inst){ inst.dispose(); }
+    });
+
+    var html = '';
+    $.each(allColumns, function(i, col){
+        var cls = '';
+        if(featureCols.indexOf(col) >= 0) cls = 'selected';
+        if(targetCol === col) cls = 'target';
+        var missing = allMissing[col] > 0 ? ' <span class="text-warning">(' + allMissing[col] + ' missing)</span>' : '';
+
+        // 构建 popover 内容
+        var popContent = '';
+        if(colStats){
+            if(colStats.numeric && colStats.numeric[col]){
+                var v = colStats.numeric[col];
+                popContent = '均值: ' + (v.mean !== null ? v.mean.toFixed(2) : '-') +
+                    ' | 标准差: ' + (v.std !== null ? v.std.toFixed(2) : '-') +
+                    ' | 范围: ' + (v['min'] !== null ? v['min'].toFixed(2) : '-') + ' ~ ' + (v['max'] !== null ? v['max'].toFixed(2) : '-') +
+                    ' | 唯一值: ' + v.nunique;
+            } else if(colStats.categorical && colStats.categorical[col]){
+                var cv = colStats.categorical[col];
+                popContent = '唯一值: ' + cv.nunique +
+                    ' | 最常见: ' + cv.top + ' (' + cv.top_freq + '次)';
+            }
+        }
+
+        html += '<div class="col-item ' + cls + '" data-col="' + col + '"';
+        if(popContent){
+            html += ' data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="right" data-bs-content="' + popContent.replace(/"/g, '&quot;') + '"';
+        }
+        html += '>' + col + ' <span class="dtype">(' + (allDtypes[col] || 'unknown') + ')</span>' + missing + '</div>';
+    });
+    $('#col-list').html(html);
+
+    // 激活 popover（BS5 API，替代 BS3 的 $.popover()）
+    document.querySelectorAll('[data-bs-toggle="popover"]').forEach(function(el){
+        bootstrap.Popover.getOrCreateInstance(el, { container: 'body', html: false });
+    });
+}
+
+function updateSummary(){
+    $('#selected-target').text(targetCol || '未选择');
+    $('#selected-features-count').text(featureCols.length);
+    var unsupervised = $('#task-type').val() === 'unsupervised';
+    var valid = unsupervised ? featureCols.length > 0 : (featureCols.length > 0 && targetCol);
+    $('#btn-save').prop('disabled', !valid);
+}
+
+// 点击列项
+$(document).on('click', '.col-item', function(){
+    var col = $(this).data('col');
+    var unsupervised = $('#task-type').val() === 'unsupervised';
+
+    if(targetCol === col){
+        // 取消目标
+        targetCol = null;
+    } else if(featureCols.indexOf(col) >= 0){
+        // 取消特征
+        featureCols = featureCols.filter(function(c){ return c !== col; });
+    } else if(!unsupervised && !targetCol){
+        // 设为目标（仅监督学习且无目标时）
+        targetCol = col;
+    } else {
+        // 设为特征
+        featureCols.push(col);
+    }
+    renderColumns();
+    updateSummary();
+});
+
+// 监督/无监督切换
+$('#task-type').change(function(){
+    if($(this).val() === 'unsupervised'){ targetCol = null; }
+    renderColumns();
+    updateSummary();
+});
+
+// 全选特征（排除目标列）
+$('#btn-select-all').click(function(){
+    featureCols = [];
+    $.each(allColumns, function(i, col){
+        if(col !== targetCol) featureCols.push(col);
+    });
+    renderColumns();
+    updateSummary();
+});
+
+// 取消全选
+$('#btn-deselect-all').click(function(){
+    featureCols = [];
+    renderColumns();
+    updateSummary();
+});
+
+// 保存
+$('#btn-save').click(function(){
+    var data = {
+        feature_cols: featureCols,
+        target_col: targetCol,
+        fill_strategy: $('#fill-strategy').val(),
+        scale_numeric: $('#scale-numeric').val() === '1',
+        task_type: $('#task-type').val(),
+    };
+    $.ajax({
+        url: '/api/datasets/' + datasetId + '/preprocess/',
+        type: 'POST', contentType: 'application/json', data: JSON.stringify(data),
+        success: function(resp){
+            if(resp.code === 0){
+                showAlert('配置已保存，任务类型: ' + (resp.data.task_type || data.task_type), 'success');
+                setTimeout(function(){ window.location.href = '/dashboard/?dataset_id=' + datasetId; }, 1500);
+            } else { showAlert(resp.msg); }
+        }
+    });
+});
+</script>
+{% endblock %}

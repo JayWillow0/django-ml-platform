@@ -1,0 +1,139 @@
+{% extends 'layout.html' %}
+
+{% block title %}账户管理 · MLPlatform{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">账户管理</li>
+{% endblock %}
+
+{% block content %}
+
+<div class="guide-card fade-in">
+    <div class="guide-icon"><i class="bi bi-people"></i></div>
+    <div class="guide-body">
+        <p class="guide-title">账户管理</p>
+        <p class="guide-text">管理能登录本系统的<strong>管理员账号</strong>：新建、编辑、删除，以及为忘记密码的同事重置密码。可通过用户名快速搜索定位。</p>
+    </div>
+</div>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <a class="btn btn-ml" href="/admin/add/">
+            <i class="bi bi-person-plus me-1"></i>新建管理员
+        </a>
+        <div class="input-group input-group-sm" style="max-width:240px;">
+            <input type="text" id="admin-search" class="form-control" placeholder="搜索用户名...">
+            <button class="btn btn-outline-secondary" id="admin-search-btn" type="button" aria-label="搜索">
+                <i class="bi bi-search"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span><i class="bi bi-list-ul header-icon me-2"></i>管理员账户</span>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>用户名</th>
+                        <th>密码</th>
+                        <th>重置密码</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="admin-tbody"></tbody>
+            </table>
+        </div>
+        <p id="admin-empty-tip" class="text-center text-muted" style="display:none;">暂无管理员账户</p>
+    </div>
+</div>
+
+{# 删除确认弹窗 #}
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle-fill me-2 text-danger"></i>确认删除管理员</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                删除后该账户将无法登录，且操作不可恢复。确认删除吗？
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                <form id="delete-form" method="post" action="">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash me-1"></i>确认删除
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block js %}
+<script>
+var curKeyword = '';
+
+function loadAdmins(keyword){
+    // 无参调用（初始化）沿用当前搜索词
+    if(keyword === undefined) keyword = curKeyword;
+    curKeyword = keyword;
+    $.get('/api/admin/list/', { keyword: keyword }, function(resp){
+        if(resp.code !== 0) return;
+        var d = resp.data;
+        if(!d.list || d.list.length === 0){
+            $('#admin-tbody').html('');
+            $('#admin-empty-tip').show();
+            return;
+        }
+        $('#admin-empty-tip').hide();
+        var rows = '';
+        $.each(d.list, function(i, a){
+            rows += '<tr>' +
+                '<td class="text-tabular">' + a.id + '</td>' +
+                '<td>' + a.username + '</td>' +
+                '<td>******</td>' +
+                '<td><a href="/admin/' + a.id + '/reset/">重置密码</a></td>' +
+                '<td>';
+            if(a.is_super){
+                rows += '<span class="btn btn-sm btn-ml disabled pe-none" title="超级管理员账户不可编辑">编辑</span> ' +
+                        '<span class="btn btn-sm btn-outline-danger disabled pe-none" title="超级管理员账户不可删除">删除</span>';
+            } else {
+                rows += '<a class="btn btn-sm btn-ml" href="/admin/' + a.id + '/edit/">编辑</a> ' +
+                        '<button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteConfirmModal" data-delete-url="/admin/' + a.id + '/delete/">删除</button>';
+            }
+            rows += '</td></tr>';
+        });
+        $('#admin-tbody').html(rows);
+    });
+}
+
+// 搜索：回车或点按钮
+function doSearch(){ loadAdmins($('#admin-search').val().trim()); }
+$('#admin-search').on('keydown', function(e){
+    if(e.keyCode === 13){ e.preventDefault(); doSearch(); }
+});
+$('#admin-search-btn').on('click', doSearch);
+
+// 删除确认弹窗：点删除按钮时把该行的删除URL填入表单action（按钮为AJAX动态渲染，Bootstrap modal 事件对动态元素同样生效）
+document.addEventListener('DOMContentLoaded', function () {
+    var modal = document.getElementById('deleteConfirmModal');
+    if (!modal) return;
+    modal.addEventListener('show.bs.modal', function (event) {
+        var trigger = event.relatedTarget;
+        modal.querySelector('#delete-form').action = trigger.getAttribute('data-delete-url');
+    });
+});
+
+loadAdmins();
+</script>
+{% endblock %}

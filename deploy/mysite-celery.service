@@ -1,0 +1,29 @@
+# ============================================================
+# systemd 服务：Celery Worker（训练任务进程）
+# ------------------------------------------------------------
+# 安装：
+#   sudo cp deploy/mysite-celery.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now mysite-celery
+#   sudo systemctl status mysite-celery
+#   journalctl -u mysite-celery -f
+#
+# 并发数由 .env 的 CELERY_WORKER_CONCURRENCY 控制（默认 2）
+# 部署前必改：WorkingDirectory、ExecStart 中的路径、User/Group
+# ============================================================
+[Unit]
+Description=mysite Celery Worker
+After=network.target redis.service
+
+[Service]
+Type=simple
+User=www
+Group=www
+WorkingDirectory=/www/wwwroot/mysite
+# --pool=prefork 多进程并行；concurrency 读 .env 的 CELERY_WORKER_CONCURRENCY
+ExecStart=/www/wwwroot/mysite/venv/bin/celery -A mysite worker --pool=prefork -l info
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

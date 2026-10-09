@@ -1,0 +1,180 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}MLPlatform · 机器学习平台{% endblock %}</title>
+
+    {# 顺序：Bootstrap 5 → tokens（覆写 --bs-* 变量）→ app（组件） #}
+    <link rel="stylesheet" href="{% static 'plugins/bootstrap-5.3.3/css/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'plugins/bootstrap-icons/bootstrap-icons.css' %}">
+    <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}">
+    {% block css %}{% endblock %}
+</head>
+
+<body>
+<div class="app-shell">
+
+    {# 移动端 sidebar 遮罩 #}
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+    {# 左侧导航（抽成 partial，便于后续维护） #}
+    {% include '_sidebar.html' %}
+
+    {# 主区域 #}
+    <div class="app-main">
+
+        <header class="app-bar">
+            <button type="button" class="bar-toggle" id="sidebar-toggle" aria-label="切换菜单">
+                <i class="bi bi-list"></i>
+            </button>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    {% block breadcrumb %}<li class="breadcrumb-item active">MLPlatform</li>{% endblock %}
+                </ol>
+            </nav>
+            <div class="bar-spacer"></div>
+        </header>
+
+        <main class="app-content">
+            {# 全局提示区 #}
+            <div id="global-alert" class="alert alert-js" role="alert"></div>
+
+            {# 工作流步骤指示器（JS 按 path 控制显隐与高亮） #}
+            <div class="stepper-wrap" id="workflow-steps-wrap" style="display:none;">
+                <ol class="stepper" id="workflow-steps">
+                    <li class="stepper-item" data-step="1" data-href="/data/">
+                        <span class="stepper-dot"><span class="stepper-num">1</span></span>
+                        <span class="stepper-label">数据管理</span>
+                    </li>
+                    <li class="stepper-item" data-step="2">
+                        <span class="stepper-dot"><span class="stepper-num">2</span></span>
+                        <span class="stepper-label">特征配置</span>
+                    </li>
+                    <li class="stepper-item" data-step="3" data-href="/dashboard/">
+                        <span class="stepper-dot"><span class="stepper-num">3</span></span>
+                        <span class="stepper-label">模型训练</span>
+                    </li>
+                    <li class="stepper-item" data-step="4" data-href="/tasks/">
+                        <span class="stepper-dot"><span class="stepper-num">4</span></span>
+                        <span class="stepper-label">结果查看</span>
+                    </li>
+                    <li class="stepper-item" data-step="5" data-href="/predict/">
+                        <span class="stepper-dot"><span class="stepper-num">5</span></span>
+                        <span class="stepper-label">在线预测</span>
+                    </li>
+                </ol>
+            </div>
+
+            {% block content %}{% endblock %}
+        </main>
+
+    </div>
+</div>
+
+<script src="{% static 'js/jquery-3.6.0.min.js' %}"></script>
+<script src="{% static 'plugins/bootstrap-5.3.3/js/bootstrap.bundle.min.js' %}"></script>
+<script src="{% static 'js/echarts.min.js' %}"></script>
+<script src="{% static 'js/chart-theme.js' %}?v=20260626-task-series"></script>
+<script src="{% static 'js/pagination.js' %}?v=20260626c"></script>
+
+<script>
+    // ===== 全局 CSRF token（所有 AJAX POST 自动附带） =====
+    function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = $.trim(cookies[i]);
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    var csrftoken = getCookie('csrftoken');
+    function csrfSafeMethod(method) {
+        return /^(GET|HEAD|OPTIONS|TRACE)$/.test(method);
+    }
+    $.ajaxSetup({
+        beforeSend: function (xhr, settings) {
+            if (!csrfSafeMethod(settings.type) && !this.crossDomain) {
+                xhr.setRequestHeader('X-CSRFToken', csrftoken);
+            }
+        }
+    });
+
+    // ===== 全局提示 =====
+    function showAlert(msg, type) {
+        var $a = $('#global-alert');
+        $a.removeClass('alert-success alert-danger alert-warning alert-info')
+            .addClass('alert-' + (type || 'danger'))
+            .text(msg).show();
+        setTimeout(function () { $a.fadeOut(); }, 4000);
+    }
+
+    // ===== 全局 AJAX 错误：会话失效 → 跳登录 =====
+    $(document).ajaxError(function (e, xhr) {
+        if (xhr.status === 302 || xhr.status === 0) {
+            window.location.href = '/login/';
+        }
+    });
+
+    $(function () {
+        // ===== sidebar 当前页高亮 =====
+        var path = window.location.pathname;
+        $('.sidebar-nav .nav-link').each(function () {
+            var href = $(this).attr('href');
+            if (href && href !== '/' && (path === href || path.indexOf(href) === 0)) {
+                $(this).addClass('active');
+            }
+        });
+
+        // ===== 移动端 sidebar 抽屉 =====
+        $('#sidebar-toggle').on('click', function () {
+            $('#app-sidebar').addClass('show');
+            $('#sidebar-backdrop').addClass('show');
+        });
+        $('#sidebar-backdrop').on('click', function () {
+            $('#app-sidebar').removeClass('show');
+            $('#sidebar-backdrop').removeClass('show');
+        });
+    });
+
+    // ===== 工作流步骤指示器（原逻辑，适配新 stepper 结构） =====
+    (function () {
+        var path = window.location.pathname;
+        var step = 0;
+        if (path.indexOf('/data/') === 0 || path === '/') step = 1;
+        else if (path.indexOf('/preprocess/') === 0) step = 2;
+        else if (path.indexOf('/dashboard/') === 0) step = 3;
+        else if (path.indexOf('/tasks/') === 0 || path.indexOf('/compare/') === 0) step = 4;
+        else if (path.indexOf('/predict/') === 0) step = 5;
+
+        if (step > 0) {
+            $('#workflow-steps-wrap').show();
+            $('#workflow-steps .stepper-item').each(function () {
+                var s = parseInt($(this).data('step'));
+                $(this).removeClass('active completed');
+                if (s < step) $(this).addClass('completed');
+                if (s === step) $(this).addClass('active');
+            });
+        }
+        // 已完成的步骤可点击跳转
+        $('#workflow-steps .stepper-item.completed').on('click', function () {
+            var href = $(this).data('href');
+            if (href) window.location.href = href;
+        });
+    })();
+</script>
+
+{% block js %}{% endblock %}
+
+</body>
+
+</html>

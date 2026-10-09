@@ -1,0 +1,365 @@
+/* =========================================================================
+   help.css — 帮助文档页
+   依赖 tokens.css。双栏阅读版式 + 右侧目录 + LaTeX 公式块 + 正文配图。
+   所有取值沿用 tokens 变量，不引入魔法值。
+   ========================================================================= */
+
+/* 平滑滚动（reduced-motion 已由 app.css 全局兜底为 auto） */
+html { scroll-behavior: smooth; }
+
+.docs-page { max-width: var(--content-max); }
+
+/* =========================================================================
+   hero：算法工作流总览（signature）
+   ========================================================================= */
+.docs-hero {
+    background: var(--bg-surface);
+    border: var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    padding: var(--space-6) var(--space-5);
+    margin-bottom: var(--space-5);
+}
+.docs-hero .hero-title {
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    color: var(--gray-900);
+    margin: 0 0 var(--space-2);
+    letter-spacing: -0.02em;
+}
+.docs-hero .hero-lead {
+    color: var(--gray-600);
+    font-size: var(--text-base);
+    margin: 0 0 var(--space-4);
+    line-height: 1.7;
+}
+
+/* 工作流节点链（流程是真序列，编号编码信息） */
+.docs-flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+.docs-flow-item {
+    flex: 1 1 120px;
+    min-width: 116px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-3);
+    position: relative;
+}
+.docs-flow-item .flow-no {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--primary);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+.docs-flow-item .flow-name {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--gray-800);
+    margin-top: 2px;
+}
+.docs-flow-item .flow-desc {
+    font-size: var(--text-xs);
+    color: var(--gray-500);
+    margin-top: 2px;
+    line-height: 1.4;
+}
+/* 节点之间的箭头（仅桌面单行时） */
+.docs-flow-item + .docs-flow-item::before {
+    content: "→";
+    position: absolute;
+    left: -13px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--gray-300);
+    font-size: 13px;
+    z-index: 1;
+}
+@media (max-width: 991.98px) {
+    .docs-flow-item { flex: 1 1 45%; }
+    .docs-flow-item + .docs-flow-item::before { content: ""; }
+}
+.docs-hero .hero-note {
+    margin-top: var(--space-3);
+    font-size: var(--text-xs);
+    color: var(--gray-500);
+}
+
+/* =========================================================================
+   正文 prose
+   ========================================================================= */
+.docs-body {
+    font-size: var(--text-base);
+    line-height: 1.8;
+    color: var(--gray-700);
+}
+.docs-body p { margin-bottom: var(--space-3); }
+.docs-body > p,
+.docs-body > ul,
+.docs-body > ol {
+    max-width: 78ch;
+}
+.docs-body strong { color: var(--gray-900); }
+.docs-body ul, .docs-body ol { margin-bottom: var(--space-3); padding-left: 1.4em; }
+.docs-body li { margin-bottom: 6px; }
+.docs-body a { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
+.docs-body a:hover { color: var(--primary-hover); }
+
+/* 章节标题：编号 + 顶部 hairline 分隔 + 锚点补偿（避开 sticky app-bar） */
+.docs-body h2 {
+    font-size: var(--text-xl);
+    font-weight: 700;
+    color: var(--gray-900);
+    margin: var(--space-6) 0 var(--space-3);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--gray-200);
+    scroll-margin-top: calc(var(--appbar-h) + 16px);
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+}
+.docs-body h3 {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--gray-900);
+    margin: var(--space-4) 0 var(--space-2);
+    scroll-margin-top: calc(var(--appbar-h) + 16px);
+}
+.docs-body h4 {
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--gray-800);
+    margin: var(--space-3) 0 var(--space-2);
+    scroll-margin-top: calc(var(--appbar-h) + 16px);
+}
+.docs-chapno {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--primary);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+}
+
+/* 行内术语：首次出现加底色提示 */
+.docs-body .term {
+    font-weight: 600;
+    color: var(--gray-900);
+    border-bottom: 2px solid rgba(var(--bs-primary-rgb), 0.3);
+    padding-bottom: 1px;
+}
+/* 行内代码 */
+.docs-body code {
+    background: var(--gray-100);
+    color: var(--gray-800);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-family: var(--font-mono);
+}
+
+/* =========================================================================
+   公式块
+   ========================================================================= */
+.docs-formula {
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-left: 3px solid var(--primary);
+    border-radius: var(--radius-sm);
+    padding: var(--space-3) var(--space-4);
+    margin: var(--space-3) 0;
+    overflow-x: auto;
+    text-align: center;
+}
+.docs-formula .formula-caption {
+    display: block;
+    margin-top: var(--space-2);
+    font-size: var(--text-xs);
+    color: var(--gray-500);
+    font-family: var(--font-mono);
+}
+.docs-formula .katex-display { margin: 0; }
+.docs-formula .katex,
+.docs-body .katex { font-size: 1.05em; }
+
+/* =========================================================================
+   正文配图
+   ========================================================================= */
+.docs-figure {
+    margin: var(--space-4) 0;
+    text-align: center;
+}
+.docs-figure img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200);
+    background: #fff;
+}
+.docs-figure figcaption {
+    margin-top: var(--space-2);
+    font-size: var(--text-xs);
+    color: var(--gray-500);
+}
+
+/* =========================================================================
+   提示块 / 算法卡片 / 链接卡片
+   ========================================================================= */
+.docs-note {
+    background: rgba(var(--bs-primary-rgb), 0.05);
+    border: 1px solid rgba(var(--bs-primary-rgb), 0.18);
+    border-radius: var(--radius-sm);
+    padding: var(--space-3) var(--space-4);
+    margin: var(--space-3) 0;
+    font-size: var(--text-sm);
+}
+.docs-note .docs-note-title {
+    font-weight: 600;
+    color: var(--gray-900);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.docs-note .docs-note-title i { color: var(--primary); }
+.docs-note p:last-child { margin-bottom: 0; }
+
+/* 算法汇总卡片 */
+.algo-group {
+    border: var(--border);
+    border-radius: var(--radius-sm);
+    margin: var(--space-3) 0;
+    overflow: hidden;
+}
+.algo-group .algo-head {
+    background: var(--gray-50);
+    padding: var(--space-2) var(--space-3);
+    font-weight: 600;
+    color: var(--gray-900);
+    font-size: var(--text-sm);
+    border-bottom: var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.algo-group .algo-head i { color: var(--primary); }
+.algo-group .algo-body { padding: var(--space-3); font-size: var(--text-sm); }
+.algo-group .algo-body p { margin-bottom: var(--space-2); }
+.algo-group .algo-body p:last-child { margin-bottom: 0; }
+.algo-group dl { margin: 0; display: grid; grid-template-columns: 7em 1fr; gap: 2px var(--space-2); }
+.algo-group dt { font-weight: 600; color: var(--gray-700); }
+.algo-group dd { margin: 0; color: var(--gray-600); }
+
+/* 链接卡片 */
+.docs-link-card {
+    display: flex;
+    gap: var(--space-3);
+    align-items: flex-start;
+    border: var(--border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-3) var(--space-4);
+    margin: var(--space-2) 0;
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+.docs-link-card:hover { border-color: var(--primary); box-shadow: var(--shadow-sm); }
+.docs-link-card .link-icon {
+    width: 38px; height: 38px;
+    flex-shrink: 0;
+    border-radius: var(--radius-sm);
+    background: var(--primary-soft);
+    color: var(--primary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+.docs-link-card .link-title { font-weight: 600; color: var(--gray-900); }
+.docs-link-card .link-title a { color: var(--primary); }
+.docs-link-card .link-desc { font-size: var(--text-sm); color: var(--gray-600); margin-top: 2px; }
+
+/* =========================================================================
+   右侧目录
+   ========================================================================= */
+.docs-toc {
+    position: sticky;
+    top: calc(var(--appbar-h) + 16px);
+    max-height: calc(100vh - var(--appbar-h) - 32px);
+    overflow-y: auto;
+    font-size: var(--text-sm);
+}
+.docs-toc .toc-title {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--gray-500);
+    font-weight: 600;
+    margin-bottom: var(--space-2);
+    padding-left: var(--space-3);
+}
+.docs-toc ul { list-style: none; padding: 0; margin: 0; }
+.docs-toc a {
+    display: block;
+    padding: 5px var(--space-3);
+    color: var(--gray-600);
+    border-left: 2px solid var(--gray-200);
+    line-height: 1.45;
+    transition: color var(--transition), border-color var(--transition), background var(--transition);
+}
+.docs-toc a:hover { color: var(--gray-900); background: var(--gray-50); }
+.docs-toc a.active {
+    color: var(--primary);
+    border-left-color: var(--primary);
+    background: var(--primary-soft);
+    font-weight: 600;
+}
+
+/* 移动端章节导航：避免把 11 章目录常驻在正文上方 */
+.docs-mobile-toc {
+    margin-bottom: var(--space-4);
+    border: var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface);
+}
+.docs-mobile-toc summary {
+    padding: var(--space-3) var(--space-4);
+    color: var(--gray-800);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    cursor: pointer;
+}
+.docs-mobile-toc nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    padding: 0 var(--space-3) var(--space-3);
+}
+.docs-mobile-toc a {
+    padding: 7px var(--space-2);
+    border-radius: var(--radius-sm);
+    color: var(--gray-600);
+    font-size: var(--text-xs);
+    line-height: 1.4;
+}
+.docs-mobile-toc a:hover,
+.docs-mobile-toc a:focus-visible {
+    color: var(--primary);
+    background: var(--primary-soft);
+}
+
+/* 移动端：正文撑满 */
+@media (max-width: 991.98px) {
+    .docs-body { font-size: var(--text-sm); }
+    .docs-body > p,
+    .docs-body > ul,
+    .docs-body > ol { max-width: none; }
+    .docs-body h2 { font-size: var(--text-lg); }
+}
+@media (max-width: 575.98px) {
+    .docs-mobile-toc nav { grid-template-columns: 1fr; }
+}

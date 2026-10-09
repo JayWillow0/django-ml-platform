@@ -1,0 +1,165 @@
+{% extends 'layout.html' %}
+
+{% block title %}在线预测 · MLPlatform{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">在线预测</li>
+{% endblock %}
+
+{% block content %}
+
+<div class="guide-card fade-in">
+    <div class="guide-icon"><i class="bi bi-magic"></i></div>
+    <div class="guide-body">
+        <p class="guide-title"><span class="guide-step">第 5 步</span>用模型做预测</p>
+        <p class="guide-text">挑一个训练好的监督学习模型，上传一份<strong>没有目标列</strong>的新数据，模型会自动预测每一行对应的值。结果可在线预览，也能下载成完整文件。</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span><i class="bi bi-cpu header-icon me-2"></i>在线预测</span>
+    </div>
+    <div class="card-body">
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <div class="form-group">
+                    <label class="form-label">选择训练好的模型</label>
+                    <select id="sel-task" class="form-control">
+                        <option value="">-- 请选择已完成的任务 --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">上传新数据（无 Label）</label>
+                    <input type="file" id="predict-file" class="form-control" accept=".csv,.xlsx,.xls">
+                </div>
+                <button class="btn btn-ml w-100" id="btn-predict" disabled>开始预测</button>
+                <button class="btn btn-outline-secondary w-100 mt-2" id="btn-reset" style="display:none;">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>重置当前预测
+                </button>
+            </div>
+            <div class="col-lg-8">
+                <div id="predict-result" style="display:none;">
+                    <div class="alert alert-success" id="predict-info"></div>
+                    <div class="table-responsive" style="max-height:400px;">
+                        <table class="table table-bordered table-sm" id="predict-table">
+                            <thead id="predict-thead"></thead>
+                            <tbody id="predict-tbody"></tbody>
+                        </table>
+                    </div>
+                    <a id="download-link" href="#" class="btn btn-ml mt-2" style="display:none;">
+                        <i class="bi bi-download me-1"></i>下载预测结果
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# 重置确认弹窗 #}
+<div class="modal fade" id="resetConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle-fill me-2 text-warning"></i>确认重置当前预测</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                将清空当前预测结果与已上传的数据文件，以便开始下一次预测（已下载到本地的结果文件不会被删除）。确认继续吗？
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-ml" id="btn-reset-confirm"><i class="bi bi-check-lg me-1"></i>确认清空</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block js %}
+<script>
+// 加载已完成的任务
+$.get('/api/tasks/', function(resp){
+    if(resp.code !== 0) return;
+    var opts = '<option value="">-- 请选择已完成的任务 --</option>';
+    $.each(resp.data, function(i, t){
+        if(t.status === 'completed' && t.task_type === 'supervised'){
+            opts += '<option value="' + t.id + '">' + t.task_name + ' (' + t.task_type_display + ')</option>';
+        }
+    });
+    $('#sel-task').html(opts);
+});
+
+// 启用按钮
+$('#sel-task, #predict-file').change(function(){
+    $('#btn-predict').prop('disabled', !$('#sel-task').val() || !$('#predict-file').val());
+});
+
+// 预测
+$('#btn-predict').click(function(){
+    var taskId = $('#sel-task').val();
+    var file = $('#predict-file')[0].files[0];
+    if(!taskId || !file) return;
+    $(this).prop('disabled', true).text('预测中...');
+    $('#btn-reset').show().prop('disabled', true);  // 预测中：显示但禁用，完成后再启用
+    var fd = new FormData();
+    fd.append('file', file);
+    $.ajax({
+        url: '/api/predict/' + taskId + '/',
+        type: 'POST', data: fd, processData: false, contentType: false,
+        success: function(resp){
+            $('#btn-predict').prop('disabled', false).text('开始预测');
+            $('#btn-reset').prop('disabled', false);  // 预测完成（含业务失败）→ 启用重置
+            if(resp.code !== 0){ showAlert(resp.msg); return; }
+            var d = resp.data;
+            $('#predict-info').text('预测完成，共 ' + d.prediction_count + ' 条数据');
+            // 渲染预览表
+            if(d.preview && d.preview.length > 0){
+                var cols = Object.keys(d.preview[0]);
+                var thead = '<tr>';
+                $.each(cols, function(i,c){ thead += '<th>' + c + '</th>'; });
+                thead += '</tr>';
+                $('#predict-thead').html(thead);
+                var tbody = '';
+                $.each(d.preview, function(i, row){
+                    tbody += '<tr>';
+                    $.each(cols, function(j,c){ tbody += '<td>' + (row[c] !== null ? row[c] : '') + '</td>'; });
+                    tbody += '</tr>';
+                });
+                $('#predict-tbody').html(tbody);
+            }
+            if(d.download_url){
+                $('#download-link').attr('href', d.download_url).show();
+            }
+            $('#predict-result').show();
+        },
+        error: function(){ $('#btn-predict').prop('disabled', false).text('开始预测'); $('#btn-reset').prop('disabled', false); }
+    });
+});
+
+// 重置当前预测：弹出确认框
+$('#btn-reset').click(function(){
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('resetConfirmModal')).show();
+});
+
+// 确认清空：执行重置
+$('#btn-reset-confirm').click(function(){
+    bootstrap.Modal.getInstance(document.getElementById('resetConfirmModal')).hide();
+    resetPredictPage();
+});
+
+// 重置页面到初始状态，准备下一次预测
+function resetPredictPage(){
+    $('#predict-file').val('');                      // 清空已上传文件
+    $('#predict-result').hide();                     // 隐藏结果区
+    $('#predict-info').text('');                     // 清空成功提示
+    $('#predict-thead').empty();                     // 清空预览表头/表体
+    $('#predict-tbody').empty();
+    $('#download-link').hide().attr('href', '#');    // 隐藏下载链接
+    $('#btn-predict').prop('disabled', true).text('开始预测');  // 文件已清空 → 禁用预测
+    $('#btn-reset').hide();                          // 隐藏重置按钮自身
+    showAlert('已重置，可开始下一次预测', 'success');
+}
+</script>
+{% endblock %}

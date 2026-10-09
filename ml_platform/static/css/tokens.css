@@ -1,0 +1,180 @@
+/* =========================================================================
+   tokens.css — MLPlatform 设计系统（Design Tokens）
+   -------------------------------------------------------------------------
+   颜色 / 字体 / 间距 / 圆角 / 阴影 / 布局尺寸，统一以 CSS 变量声明。
+   同时覆写 Bootstrap 5 的 --bs-* 变量，让 BS5 原生组件直接采用本系统配色。
+   中文不内嵌（体积大），走系统 PingFang SC / Microsoft YaHei fallback。
+   ========================================================================= */
+
+/* ---------- 字体（本地托管 woff2） ---------- */
+@font-face {
+    font-family: 'IBM Plex Sans';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../fonts/ibm-plex-sans/ibm-plex-sans-400.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'IBM Plex Sans';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('../fonts/ibm-plex-sans/ibm-plex-sans-500.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'IBM Plex Sans';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('../fonts/ibm-plex-sans/ibm-plex-sans-600.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'IBM Plex Sans';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('../fonts/ibm-plex-sans/ibm-plex-sans-700.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../fonts/ibm-plex-mono/ibm-plex-mono-400.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('../fonts/ibm-plex-mono/ibm-plex-mono-500.woff2') format('woff2');
+}
+
+/* ---------- 设计 token ---------- */
+:root {
+    /* 字体栈 */
+    --font-sans: 'IBM Plex Sans', 'PingFang SC', 'Microsoft YaHei',
+        -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'IBM Plex Mono', 'JetBrains Mono', Menlo, Monaco, Consolas, monospace;
+
+    /* 画布与表面 */
+    --bg-canvas: #f8fafc;
+    --bg-surface: #ffffff;
+    --bg-sidebar: #0f172a;
+    --bg-sidebar-soft: #1e293b;
+
+    /* 中性灰阶（slate） */
+    --gray-50: #f8fafc;
+    --gray-100: #f1f5f9;
+    --gray-200: #e2e8f0;
+    --gray-300: #cbd5e1;
+    --gray-400: #94a3b8;
+    --gray-500: #64748b;
+    --gray-600: #475569;
+    --gray-700: #334155;
+    --gray-800: #1e293b;
+    --gray-900: #0f172a;
+
+    /* 主交互（蓝，延续原品牌 #3498db 基因、更深沉现代） */
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --primary-active: #1e40af;
+    --primary-soft: #eff6ff;
+    --primary-soft-rgb: 239, 246, 255;
+
+    /* 状态语义（柔化） */
+    --success: #16a34a;
+    --warning: #d97706;
+    --danger: #dc2626;
+    --info: #0ea5e9;
+    --neutral: #64748b;
+
+    /* 状态浅底（徽章/标签用） */
+    --success-soft: #dcfce7;
+    --warning-soft: #fef3c7;
+    --danger-soft: #fee2e2;
+    --info-soft: #e0f2fe;
+    --neutral-soft: #f1f5f9;
+
+    /* 图表色板（色盲友好，UI + ECharts 共用） */
+    --chart-1: #2563eb;
+    --chart-2: #0ea5e9;
+    --chart-3: #10b981;
+    --chart-4: #f59e0b;
+    --chart-5: #ef4444;
+    --chart-6: #8b5cf6;
+
+    /* 字号阶梯 */
+    --text-xs: 0.75rem;
+    --text-sm: 0.875rem;
+    --text-base: 0.9375rem;
+    --text-lg: 1.125rem;
+    --text-xl: 1.25rem;
+    --text-2xl: 1.5rem;
+    --text-3xl: 1.875rem;
+
+    /* 间距 */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --space-7: 48px;
+
+    /* 布局尺寸 */
+    --sidebar-w: 240px;
+    --appbar-h: 56px;
+    --content-max: 1400px;
+
+    /* 圆角 */
+    --radius-sm: 6px;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --radius-pill: 9999px;
+
+    /* 阴影 */
+    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+    --shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+    --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.12);
+
+    /* 边框 */
+    --border: 1px solid var(--gray-200);
+
+    /* 过渡 */
+    --transition: 180ms ease;
+
+    /* ---- 覆写 Bootstrap 5 原生变量（让 BS5 组件采用本系统配色） ---- */
+    --bs-font-sans-serif: var(--font-sans);
+    --bs-body-font-family: var(--font-sans);
+    --bs-body-font-size: var(--text-base);
+    --bs-body-color: var(--gray-700);
+    --bs-body-bg: var(--bg-canvas);
+    --bs-body-emphasis-color: var(--gray-900);
+    --bs-body-secondary-color: var(--gray-500);
+    --bs-body-tertiary-color: var(--gray-400);
+    --bs-border-color: var(--gray-200);
+    --bs-border-radius: var(--radius);
+    --bs-border-radius-sm: var(--radius-sm);
+    --bs-border-radius-lg: var(--radius-lg);
+    --bs-heading-color: var(--gray-900);
+    --bs-link-color: var(--primary);
+    --bs-link-hover-color: var(--primary-hover);
+    --bs-primary: var(--primary);
+    --bs-primary-rgb: 37, 99, 235;
+    --bs-success: var(--success);
+    --bs-success-rgb: 22, 163, 74;
+    --bs-warning: var(--warning);
+    --bs-warning-rgb: 217, 119, 6;
+    --bs-danger: var(--danger);
+    --bs-danger-rgb: 220, 38, 38;
+    --bs-info: var(--info);
+    --bs-info-rgb: 14, 165, 233;
+    --bs-secondary: var(--gray-500);
+    --bs-secondary-rgb: 100, 116, 139;
+}

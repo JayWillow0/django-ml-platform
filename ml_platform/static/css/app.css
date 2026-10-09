@@ -1,0 +1,661 @@
+/* =========================================================================
+   app.css — MLPlatform 全局组件样式
+   -------------------------------------------------------------------------
+   依赖 tokens.css（设计变量）。覆盖布局壳、sidebar、app bar、工作流步骤、
+   卡片、按钮、表格、状态徽章、表单、提示、引导卡、上传区、图表容器。
+   选择器尽量用明确类名，避免与 BS5 元素选择器互相抵消。
+   ========================================================================= */
+
+/* ---------- 基础 ---------- */
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: 1.6;
+    color: var(--gray-700);
+    background-color: var(--bg-canvas);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: var(--gray-900);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+}
+
+a { text-decoration: none; }
+a:hover { color: var(--primary-hover); }
+
+::selection { background: rgba(var(--bs-primary-rgb), 0.18); }
+
+/* 细滚动条 */
+* { scrollbar-width: thin; scrollbar-color: var(--gray-300) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 4px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--gray-400); }
+
+/* 数字等宽工具类（表格 / 统计对齐） */
+.text-tabular { font-variant-numeric: tabular-nums; }
+
+code, kbd, .font-mono { font-family: var(--font-mono); }
+
+/* =========================================================================
+   布局壳：左侧 sidebar + 顶部 app bar + 主内容
+   ========================================================================= */
+.app-shell { min-height: 100vh; }
+
+/* ---- sidebar ---- */
+.app-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--sidebar-w);
+    background: var(--bg-sidebar);
+    color: var(--gray-400);
+    z-index: 1045;
+    display: flex;
+    flex-direction: column;
+    transition: transform var(--transition);
+    overflow-y: auto;
+}
+
+.app-sidebar .sidebar-brand {
+    height: var(--appbar-h);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 20px;
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.02em;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.app-sidebar .sidebar-brand .brand-mark {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--info) 100%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 15px;
+}
+
+.sidebar-section {
+    padding: 16px 12px 4px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--gray-600);
+    font-weight: 600;
+}
+
+.sidebar-nav { list-style: none; padding: 0 12px; margin: 0; }
+
+.sidebar-nav .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
+    border-radius: var(--radius-sm);
+    color: var(--gray-400);
+    font-weight: 500;
+    font-size: var(--text-sm);
+    position: relative;
+    transition: background var(--transition), color var(--transition);
+}
+
+.sidebar-nav .nav-link i { font-size: 16px; width: 18px; text-align: center; }
+
+.sidebar-nav .nav-link:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+}
+
+.sidebar-nav .nav-link.active {
+    background: rgba(var(--bs-primary-rgb), 0.16);
+    color: #fff;
+}
+
+.sidebar-nav .nav-link.active::before {
+    content: "";
+    position: absolute;
+    left: -12px;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--primary);
+}
+
+/* sidebar 底部用户区 */
+.sidebar-footer {
+    margin-top: auto;
+    padding: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sidebar-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+}
+
+.sidebar-user .avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--info) 100%);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+.sidebar-user .user-name {
+    color: #fff;
+    font-weight: 500;
+    font-size: var(--text-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sidebar-user .user-role { color: var(--gray-500); font-size: 11px; }
+
+.sidebar-footer .footer-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.sidebar-footer .footer-actions a {
+    flex: 1;
+    text-align: center;
+    padding: 7px 8px;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--gray-400);
+    font-size: 12px;
+    font-weight: 500;
+    transition: background var(--transition), color var(--transition);
+}
+
+.sidebar-footer .footer-actions a:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+/* ---- 主区域 ---- */
+.app-main {
+    margin-left: var(--sidebar-w);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.app-bar {
+    height: var(--appbar-h);
+    position: sticky;
+    top: 0;
+    z-index: 1020;
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: saturate(180%) blur(10px);
+    -webkit-backdrop-filter: saturate(180%) blur(10px);
+    border-bottom: var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 var(--space-5);
+}
+
+.app-bar .bar-toggle {
+    display: none;
+    border: 0;
+    background: transparent;
+    font-size: 20px;
+    color: var(--gray-700);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+}
+
+.app-bar .bar-toggle:hover { background: var(--gray-100); }
+
+.app-bar .breadcrumb {
+    margin: 0;
+    font-size: var(--text-sm);
+    --bs-breadcrumb-divider-color: var(--gray-400);
+}
+
+.app-bar .breadcrumb-item, .app-bar .breadcrumb-item a { color: var(--gray-500); }
+.app-bar .breadcrumb-item.active { color: var(--gray-900); font-weight: 600; }
+.app-bar .breadcrumb-item + .breadcrumb-item::before { color: var(--gray-400); }
+
+.app-bar .bar-spacer { flex: 1; }
+
+.app-content {
+    flex: 1;
+    width: 100%;
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: var(--space-5);
+}
+
+/* sidebar 移动端遮罩 */
+.sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+    z-index: 1044;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--transition);
+}
+.sidebar-backdrop.show { opacity: 1; visibility: visible; }
+
+/* =========================================================================
+   工作流步骤指示器（stepper）
+   ========================================================================= */
+.stepper-wrap { margin-bottom: var(--space-5); }
+
+.stepper {
+    list-style: none;
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+    margin: 0;
+    background: var(--bg-surface);
+    border: var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.stepper-item {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    position: relative;
+    color: var(--gray-400);
+    font-size: var(--text-sm);
+    font-weight: 500;
+}
+
+.stepper-item + .stepper-item { border-left: var(--border); }
+
+.stepper-dot {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--gray-100);
+    color: var(--gray-500);
+    flex-shrink: 0;
+    transition: background var(--transition), color var(--transition);
+}
+
+.stepper-item.active { color: var(--gray-900); }
+.stepper-item.active .stepper-dot {
+    background: var(--primary);
+    color: #fff;
+    box-shadow: 0 0 0 4px rgba(var(--bs-primary-rgb), 0.15);
+}
+
+.stepper-item.completed { color: var(--gray-700); cursor: pointer; }
+.stepper-item.completed:hover { background: var(--gray-50); }
+.stepper-item.completed .stepper-dot {
+    background: var(--success);
+    color: #fff;
+}
+.stepper-item.completed .stepper-dot::before {
+    content: "\2713"; /* ✓ */
+    font-size: 13px;
+}
+.stepper-item.completed .stepper-num { display: none; }
+
+/* =========================================================================
+   卡片（替代 BS3 panel）
+   ========================================================================= */
+.card {
+    border: var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    background: var(--bg-surface);
+}
+.card .card-header {
+    background: var(--bg-surface);
+    border-bottom: var(--border);
+    padding: 14px 18px;
+    font-weight: 600;
+    color: var(--gray-900);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+.card .card-header .header-icon { color: var(--primary); }
+.card .card-body { padding: 18px; }
+.card .card-title { margin: 0; font-size: var(--text-base); }
+
+/* =========================================================================
+   按钮
+   ========================================================================= */
+.btn { font-weight: 500; border-radius: var(--radius-sm); }
+
+/* 品牌主按钮 .btn-ml（项目历史类名，等价于 primary，保持向后兼容） */
+.btn-ml {
+    --bs-btn-bg: var(--primary);
+    --bs-btn-border-color: var(--primary);
+    --bs-btn-hover-bg: var(--primary-hover);
+    --bs-btn-hover-border-color: var(--primary-hover);
+    --bs-btn-active-bg: var(--primary-active);
+    --bs-btn-active-border-color: var(--primary-active);
+    --bs-btn-color: #fff;
+    --bs-btn-hover-color: #fff;
+    --bs-btn-active-color: #fff;
+    --bs-btn-disabled-bg: var(--primary);
+    --bs-btn-disabled-border-color: var(--primary);
+    --bs-btn-disabled-color: #fff;
+}
+
+.btn-ghost {
+    --bs-btn-bg: transparent;
+    --bs-btn-border-color: transparent;
+    --bs-btn-hover-bg: var(--gray-100);
+    --bs-btn-hover-border-color: var(--gray-100);
+    --bs-btn-active-bg: var(--gray-200);
+    --bs-btn-color: var(--gray-700);
+    --bs-btn-hover-color: var(--gray-900);
+}
+
+.btn-outline-secondary {
+    --bs-btn-color: var(--gray-700);
+    --bs-btn-border-color: var(--gray-300);
+    --bs-btn-hover-bg: var(--gray-50);
+    --bs-btn-hover-border-color: var(--gray-400);
+    --bs-btn-hover-color: var(--gray-900);
+    --bs-btn-active-bg: var(--gray-100);
+}
+
+/* BS3 btn-block 兼容 */
+.btn-block { width: 100%; }
+
+/* =========================================================================
+   表格
+   ========================================================================= */
+.table {
+    --bs-table-color: var(--gray-700);
+    --bs-table-bg: transparent;
+    --bs-table-border-color: var(--gray-200);
+    --bs-table-hover-bg: rgba(var(--bs-primary-rgb), 0.04);
+    --bs-table-hover-color: var(--gray-900);
+    margin-bottom: 0;
+    font-size: var(--text-sm);
+    vertical-align: middle;
+}
+
+.table thead th {
+    background: var(--gray-50);
+    color: var(--gray-500);
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--gray-200);
+    border-top: 0;
+    padding: 10px 12px;
+    white-space: nowrap;
+}
+
+.table tbody td {
+    padding: 12px;
+    border-bottom: var(--border);
+    color: var(--gray-700);
+}
+
+.table tbody tr:last-child td { border-bottom: 0; }
+
+.table-hover tbody tr { transition: background var(--transition); }
+
+/* 数字列右对齐 */
+.table .num, .table td.text-tabular { font-variant-numeric: tabular-nums; }
+
+/* =========================================================================
+   状态徽章（浅底深字药丸）
+   ========================================================================= */
+.badge-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.5;
+    letter-spacing: 0.01em;
+}
+
+.badge-status::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.status-uploaded { background: var(--info-soft); color: #0369a1; }
+.status-preprocessed { background: var(--warning-soft); color: #b45309; }
+.status-completed { background: var(--success-soft); color: #15803d; }
+.status-running {
+    background: var(--warning-soft);
+    color: #b45309;
+}
+.status-running::before { animation: pulse-dot 1.4s ease-in-out infinite; }
+.status-failed { background: var(--danger-soft); color: #b91c1c; }
+.status-pending { background: var(--neutral-soft); color: var(--gray-600); }
+.status-cancelled { background: var(--neutral-soft); color: var(--gray-600); }
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+/* =========================================================================
+   表单
+   ========================================================================= */
+.form-control, .form-select {
+    border-color: var(--gray-300);
+    color: var(--gray-800);
+    font-size: var(--text-sm);
+    border-radius: var(--radius-sm);
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(var(--bs-primary-rgb), 0.15);
+}
+
+.form-label { font-weight: 500; color: var(--gray-700); font-size: var(--text-sm); }
+
+.form-text { color: var(--gray-500); }
+
+/* =========================================================================
+   分页
+   BS5 的 .pagination 只重置了 padding-left / list-style，未清除 reboot 给 ul
+   的 margin-bottom:1rem。在 align-items:center 的 flex 容器里，这个不对称
+   margin 会让分页可见区整体上移约 8px，表现为「比左侧搜索框/nav-tabs 偏高」。
+   ========================================================================= */
+.pagination { margin-bottom: 0; }
+
+/* =========================================================================
+   提示（alert，全局 + 行内）
+   ========================================================================= */
+.alert {
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    border-left-width: 3px;
+    font-size: var(--text-sm);
+}
+.alert-js { display: none; margin-bottom: 0; }
+#global-alert { margin: 0; }
+
+/* =========================================================================
+   引导卡（signature）—— 每页顶部，用大白话告诉小白现在在哪、下一步做什么
+   ========================================================================= */
+.guide-card {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    background: linear-gradient(135deg,
+        rgba(var(--bs-primary-rgb), 0.06) 0%,
+        rgba(var(--info-rgb, 14, 165, 233), 0.05) 100%);
+    border: 1px solid rgba(var(--bs-primary-rgb), 0.18);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    margin-bottom: var(--space-5);
+}
+
+.guide-card .guide-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius);
+    background: var(--primary);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.guide-card .guide-body { flex: 1; min-width: 0; }
+.guide-card .guide-title {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--gray-900);
+    margin: 0 0 2px;
+}
+.guide-card .guide-title .guide-step {
+    color: var(--primary);
+    font-weight: 700;
+    margin-right: 6px;
+}
+.guide-card .guide-text {
+    color: var(--gray-600);
+    font-size: var(--text-sm);
+    margin: 0;
+    line-height: 1.6;
+}
+.guide-card .guide-text strong { color: var(--gray-800); }
+
+/* =========================================================================
+   上传区
+   ========================================================================= */
+.upload-zone {
+    border: 2px dashed var(--gray-300);
+    border-radius: var(--radius);
+    padding: 30px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color var(--transition), background var(--transition);
+    color: var(--gray-500);
+}
+
+.upload-zone:hover {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+}
+
+.upload-zone.dragover {
+    border-color: var(--success);
+    background: var(--success-soft);
+}
+
+.upload-zone .upload-icon {
+    font-size: 36px;
+    color: var(--gray-400);
+    margin-bottom: 8px;
+    display: block;
+}
+
+.upload-zone:hover .upload-icon { color: var(--primary); }
+
+/* =========================================================================
+   图表容器
+   ========================================================================= */
+.chart-card { min-height: 380px; }
+.chart-container { width: 100%; height: 420px; }
+.chart-hint {
+    color: var(--gray-500);
+    font-size: var(--text-sm);
+    margin-top: 6px;
+}
+
+/* =========================================================================
+   通用辅助
+   ========================================================================= */
+.text-muted { color: var(--gray-500) !important; }
+.text-secondary { color: var(--gray-500) !important; }
+
+.page-title {
+    font-size: var(--text-xl);
+    font-weight: 700;
+    color: var(--gray-900);
+    margin: 0 0 var(--space-2);
+}
+.page-subtitle { color: var(--gray-500); font-size: var(--text-sm); margin-bottom: var(--space-5); }
+
+/* 入场动画 */
+.fade-in {
+    animation: fade-in-up var(--transition) ease both;
+}
+@keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* =========================================================================
+   响应式：< lg 时 sidebar 折叠为抽屉
+   ========================================================================= */
+@media (max-width: 991.98px) {
+    .app-sidebar { transform: translateX(-100%); }
+    .app-sidebar.show { transform: translateX(0); }
+    .app-main { margin-left: 0; }
+    .app-bar .bar-toggle { display: inline-flex; }
+    .app-content { padding: var(--space-4); }
+    .stepper-item .stepper-label { display: none; }
+    .stepper-item { padding: 12px; justify-content: center; }
+}
+
+/* =========================================================================
+   减弱动效：尊重系统偏好
+   ========================================================================= */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
+}

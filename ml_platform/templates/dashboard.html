@@ -1,0 +1,698 @@
+{% extends 'layout.html' %}
+
+{% block title %}模型训练 · MLPlatform{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">模型训练</li>
+{% endblock %}
+
+{% block css %}
+<style>
+    /* 训练日志：深色终端风 mono 容器（替代 BS3 well） */
+    #progress-log {
+        background: var(--gray-900);
+        color: var(--gray-300);
+        font-family: var(--font-mono);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="guide-card fade-in">
+    <div class="guide-icon"><i class="bi bi-cpu"></i></div>
+    <div class="guide-body">
+        <p class="guide-title"><span class="guide-step">第 3 步</span>训练你的模型</p>
+        <p class="guide-text">选好数据后，给这次训练起个名字、选择是<strong>监督学习</strong>（预测一个目标值）还是<strong>无监督学习</strong>（找群体/查异常/看规律）。点「开始训练」后会自动跑多个模型并挑选最佳的那个，过程中你能看到进度条和实时日志。完成后下方会出现对比图表。</p>
+    </div>
+</div>
+
+<!-- 训练启动区 -->
+<div class="card mb-4" id="training-start-card">
+    <div class="card-header">
+        <span><i class="bi bi-play-circle header-icon me-2"></i>启动训练</span>
+    </div>
+    <div class="card-body">
+        <!-- 第一行：数据集、任务名、模式 -->
+        <div class="row g-3 align-items-end">
+            <div class="col-lg-3">
+                <label class="form-label">选择数据集</label>
+                <select id="sel-dataset" class="form-control">
+                    <option value="">-- 请先在"数据管理"中上传并配置 --</option>
+                </select>
+            </div>
+            <div class="col-lg-3">
+                <label class="form-label">任务名称</label>
+                <input type="text" id="task-name" class="form-control" placeholder="输入任务名称">
+            </div>
+            <div class="col-lg-2">
+                <label class="form-label">训练模式</label>
+                <select id="train-mode" class="form-control">
+                    <option value="supervised">监督学习</option>
+                    <option value="unsupervised">无监督学习</option>
+                </select>
+            </div>
+            <div class="col-lg-2" id="unsupervised-subtype-wrap" style="display:none;">
+                <label class="form-label">分析类型</label>
+                <select id="unsupervised-subtype" class="form-control">
+                    <option value="unsupervised.clustering">帮我找群体（聚类）</option>
+                    <option value="unsupervised.anomaly">找出异常样本</option>
+                    <option value="unsupervised.dim_reduction">简化数据看规律（降维）</option>
+                </select>
+            </div>
+            <div class="col-lg-2">
+                <button class="btn btn-ml w-100" id="btn-train">开始训练</button>
+            </div>
+        </div>
+
+        <!-- 训练状态 -->
+        <div id="train-status" class="alert mt-3" style="display:none; padding:6px 12px;"></div>
+
+        <!-- 进度面板（训练时显示） -->
+        <div id="progress-panel" style="display:none;margin-top:12px;">
+            <div class="progress" style="margin-bottom:6px;height:20px;">
+                <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated"
+                     role="progressbar" style="width:0%;line-height:20px;">
+                    <span id="progress-percent" style="font-size:12px;">0%</span>
+                </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <small id="progress-stage" class="text-muted"></small>
+            </div>
+            <div id="progress-log"
+                 style="max-height:100px;overflow-y:auto;font-size:11px;margin-top:6px;padding:6px 10px;border-radius:var(--radius-sm);display:none;"></div>
+        </div>
+
+        <!-- 监督学习参数 -->
+        <div class="row g-3" id="supervised-params" style="margin-top:12px;">
+            <div class="col-lg-2">
+                <label class="form-label">测试集比例</label>
+                <input type="number" id="param-test-size" class="form-control" value="0.2" min="0.1" max="0.5" step="0.05">
+            </div>
+            <div class="col-lg-2">
+                <label class="form-label">特征选择方法</label>
+                <select id="param-selection-method" class="form-control">
+                    <option value="f_test">F检验(p值)</option>
+                    <option value="kbest">Top-K</option>
+                    <option value="mutual_info">互信息</option>
+                </select>
+            </div>
+            <div class="col-lg-2" id="fs-f-test-params">
+                <label class="form-label">F检验 p值阈值</label>
+                <input type="number" id="param-p-threshold" class="form-control" value="0.05" min="0.001" max="1.0" step="0.01">
+            </div>
+            <div class="col-lg-2" id="fs-kbest-params" style="display:none;">
+                <label class="form-label">保留特征数 K</label>
+                <input type="number" id="param-n-features" class="form-control" value="10" min="1" step="1">
+                <small class="text-muted" style="font-size:0.75rem;">上限值，特征数不足时自动取全部</small>
+            </div>
+            <div class="col-lg-2" id="fs-mi-params" style="display:none;">
+                <label class="form-label">互信息阈值</label>
+                <input type="number" id="param-mi-threshold" class="form-control" value="0.05" min="0" step="0.001">
+            </div>
+            <div class="col-lg-2">
+                <label class="form-label">Optuna试验次数</label>
+                <input type="number" id="param-n-trials" class="form-control" value="10" min="1" max="500" step="1">
+            </div>
+            <div class="col-lg-2">
+                <label class="form-label">交叉验证折数</label>
+                <input type="number" id="param-cv-folds" class="form-control" value="3" min="2" max="10" step="1">
+            </div>
+            <div class="col-lg-2">
+                <label class="form-label">随机种子</label>
+                <input type="number" id="param-random-state" class="form-control" value="42">
+            </div>
+            <div class="col-lg-2">
+                <label class="form-label">数值缩放类型</label>
+                <select id="param-scaler-type" class="form-control">
+                    <option value="standard">StandardScaler</option>
+                    <option value="minmax">MinMaxScaler</option>
+                </select>
+                <small class="text-muted" style="font-size:0.75rem;">数据集关闭缩放时忽略</small>
+            </div>
+        </div>
+
+        <!-- 无监督-聚类参数 -->
+        <div class="row g-3" id="unsupervised-params" style="margin-top:12px; display:none;">
+            <div class="col-lg-2">
+                <label class="form-label">聚类数K</label>
+                <input type="number" id="param-n-clusters" class="form-control" value="3" min="2" max="20" step="1">
+            </div>
+            <div class="col-lg-2">
+                <label class="form-label">K搜索范围(最小)</label>
+                <input type="number" id="param-k-min" class="form-control" value="2" min="2" max="10">
+            </div>
+            <div class="col-lg-2">
+                <label class="form-label">K搜索范围(最大)</label>
+                <input type="number" id="param-k-max" class="form-control" value="10" min="3" max="30">
+            </div>
+            <div class="col-lg-2">
+                <label class="form-label">启用降维</label>
+                <select id="param-dim-reduction" class="form-control">
+                    <option value="true">是</option>
+                    <option value="false">否</option>
+                </select>
+            </div>
+            <div class="col-lg-2">
+                <label class="form-label">随机种子</label>
+                <input type="number" id="param-random-state-u" class="form-control" value="42">
+            </div>
+        </div>
+
+        <!-- 无监督-异常检测参数 -->
+        <div class="row g-3" id="anomaly-params" style="margin-top:12px; display:none;">
+            <div class="col-lg-3">
+                <label class="form-label">异常比例 (contamination)</label>
+                <input type="number" id="param-contamination" class="form-control" value="0.1" min="0.01" max="0.5" step="0.01">
+            </div>
+            <div class="col-lg-2">
+                <label class="form-label">随机种子</label>
+                <input type="number" id="param-random-state-a" class="form-control" value="42">
+            </div>
+        </div>
+
+        <!-- 无监督-降维可视化参数 -->
+        <div class="row g-3" id="dimreduction-params" style="margin-top:12px; display:none;">
+            <div class="col-lg-2">
+                <label class="form-label">随机种子</label>
+                <input type="number" id="param-random-state-d" class="form-control" value="42">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 图表区 -->
+<div class="row g-4" id="charts-area" style="display:none;">
+    <div class="col-lg-6">
+        <div class="card chart-card">
+            <div class="card-header"><span><i class="bi bi-bar-chart header-icon me-2"></i>模型性能对比</span></div>
+            <div class="card-body"><div id="chart-model-comparison" class="chart-container"></div></div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card chart-card">
+            <div class="card-header"><span><i class="bi bi-grid-3x3-gap header-icon me-2"></i>特征相关性分析</span></div>
+            <div class="card-body"><div id="chart-correlation" class="chart-container"></div></div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card chart-card">
+            <div class="card-header"><span><i class="bi bi-bar-chart-steps header-icon me-2"></i>特征重要性</span></div>
+            <div class="card-body"><div id="chart-feature-importance" class="chart-container"></div></div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card chart-card">
+            <div class="card-header"><span><i class="bi bi-graph-up header-icon me-2"></i>Optuna调参优化历史</span></div>
+            <div class="card-body"><div id="chart-optimization" class="chart-container"></div></div>
+        </div>
+    </div>
+    <!-- 无监督图表区 -->
+    <div class="col-lg-6" id="chart-elbow-wrap" style="display:none;">
+        <div class="card chart-card">
+            <div class="card-header"><span><i class="bi bi-bezier header-icon me-2"></i>KMeans肘部法则</span></div>
+            <div class="card-body">
+                <div id="chart-elbow" class="chart-container"></div>
+                <p class="chart-hint">&#128161; 肘部法则：寻找拐点确定最佳聚类数 K，SSE 下降变缓处即为推荐值</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6" id="chart-cluster-comp-wrap" style="display:none;">
+        <div class="card chart-card">
+            <div class="card-header"><span><i class="bi bi-diagram-3 header-icon me-2"></i>聚类算法对比</span></div>
+            <div class="card-body">
+                <div id="chart-cluster-comparison" class="chart-container"></div>
+                <p class="chart-hint">&#128161; 轮廓系数越高（接近1），聚类效果越好；负值表示样本可能分错簇</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6" id="chart-scree-wrap" style="display:none;">
+        <div class="card chart-card">
+            <div class="card-header"><span><i class="bi bi-pie-chart header-icon me-2"></i>PCA方差解释</span></div>
+            <div class="card-body">
+                <div id="chart-scree" class="chart-container"></div>
+                <p class="chart-hint">&#128161; 碎石图：各主成分的方差贡献，前几个主成分累计解释率越高，降维效果越好</p>
+            </div>
+        </div>
+    </div>
+    <!-- 异常检测专属图表区 -->
+    <div class="col-lg-6" id="chart-anomaly-summary-wrap" style="display:none;">
+        <div class="card chart-card">
+            <div class="card-header"><span><i class="bi bi-pie-chart header-icon me-2"></i>异常/正常样本占比</span></div>
+            <div class="card-body">
+                <div id="chart-anomaly-summary" class="chart-container"></div>
+                <p class="chart-hint">&#128161; 饼图展示正常样本（绿）与异常样本（红）的数量占比</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6" id="chart-anomaly-score-wrap" style="display:none;">
+        <div class="card chart-card">
+            <div class="card-header"><span><i class="bi bi-histogram header-icon me-2"></i>异常评分分布</span></div>
+            <div class="card-body">
+                <div id="chart-anomaly-score" class="chart-container"></div>
+                <p class="chart-hint">&#128161; 堆叠直方图：评分越低越可能为异常样本，红色区域为被标记为异常的样本分布</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6" id="chart-scatter-pca-wrap" style="display:none;">
+        <div class="card chart-card">
+            <div class="card-header"><span><i class="bi bi-diagram-2 header-icon me-2"></i><span id="heading-scatter-pca">PCA降维可视化</span></span></div>
+            <div class="card-body">
+                <div id="chart-scatter-pca" class="chart-container"></div>
+                <p class="chart-hint" id="hint-scatter-pca">&#128161; PCA 降维后的数据分布，不同颜色代表不同聚类，同色点越集中聚类越紧密</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6" id="chart-scatter-tsne-wrap" style="display:none;">
+        <div class="card chart-card">
+            <div class="card-header"><span><i class="bi bi-diagram-2 header-icon me-2"></i><span id="heading-scatter-tsne">t-SNE可视化</span></span></div>
+            <div class="card-body">
+                <div id="chart-scatter-tsne" class="chart-container"></div>
+                <p class="chart-hint" id="hint-scatter-tsne">&#128161; t-SNE 降维可视化，保留局部邻域结构，同色点越集中聚类越紧密</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 训练结果摘要 -->
+<div class="row g-4 mt-0" id="results-summary" style="display:none;">
+    <div class="col-lg-12">
+        <div class="card">
+            <div class="card-header"><span><i class="bi bi-clipboard-check header-icon me-2"></i>训练结果摘要</span></div>
+            <div class="card-body" id="results-body"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block js %}
+<script>
+var charts = {};
+
+// 加载已配置数据集
+function loadDatasets(){
+    $.get('/api/datasets/', function(resp){
+        if(resp.code !== 0) return;
+        var opts = '<option value="">-- 请先配置数据集 --</option>';
+        $.each(resp.data, function(i, d){
+            if(d.status === 'preprocessed' || d.status === 'completed'){
+                opts += '<option value="' + d.id + '">' + d.file_name + ' (' + d.status_display + ')</option>';
+            }
+        });
+        $('#sel-dataset').html(opts);
+    });
+}
+
+// 渲染 ECharts（统一注入主题：所有图表经此入口套用 applyChartTheme）
+function renderChart(chartId, option, meta){
+    var dom = document.getElementById(chartId);
+    if(!dom) return;
+    if(charts[chartId]) charts[chartId].dispose();
+    charts[chartId] = echarts.init(dom);
+    charts[chartId].setOption(applyChartTheme(option, meta || {}));
+    // 确保 display:none → show 后尺寸正确
+    setTimeout(function(){ charts[chartId] && charts[chartId].resize(); }, 100);
+}
+
+function chartThemeMeta(chartType){
+    if(chartType === 'model_comparison'){
+        return { chartType: chartType, barMode: 'rank' };
+    }
+    if(chartType === 'correlation'){
+        return { chartType: chartType, barMode: 'rank', rankBy: 'abs' };
+    }
+    if(chartType === 'feature_importance'){
+        return { chartType: chartType, barMode: 'rank' };
+    }
+    if(chartType === 'optimization'){
+        return { chartType: chartType };
+    }
+    return { chartType: chartType };
+}
+
+// 加载图表
+function loadChart(taskId, chartType, chartId, wrapId){
+    $.get('/api/tasks/' + taskId + '/chart/' + chartType + '/', function(resp){
+        if(resp.code !== 0 || !resp.echarts) return;
+        if(wrapId) $('#' + wrapId).show();
+        renderChart(chartId, resp.echarts, chartThemeMeta(chartType));
+    });
+}
+
+// 加载训练结果
+function loadResults(taskId){
+    $.get('/api/tasks/' + taskId + '/results/', function(resp){
+        if(resp.code !== 0) return;
+        var r = resp.data;
+        var tt = r.task_type || '';
+        var isSupervised = (tt === 'supervised');
+        var isClustering = (tt === 'unsupervised' || tt === 'unsupervised.clustering');
+        var isAnomaly = (tt === 'unsupervised.anomaly');
+        var isDimReduction = (tt === 'unsupervised.dim_reduction');
+
+        $('#results-summary').show();
+
+        // 隐藏所有图表区（含异常检测专属）
+        var allCharts = ['model-comparison','correlation','feature-importance','optimization',
+                         'elbow','cluster-comparison','scree','scatter-pca','scatter-tsne',
+                         'anomaly-summary','anomaly-score'];
+        allCharts.forEach(function(c){
+            var wrap = $('#chart-' + c).closest('.col-lg-6');
+            if(wrap.length) wrap.hide();
+        });
+
+        // 监督学习面板始终可见（HTML中无 display:none），直接显示
+        // 无监督/异常检测/降维 的面板由 loadChart 成功时按需显示
+        if(isSupervised){
+            allCharts.slice(0, 4).forEach(function(c){
+                var wrap = $('#chart-' + c).closest('.col-lg-6');
+                if(wrap.length) wrap.show();
+            });
+        }
+
+        // 动态面板标题（在 loadChart 之前设置，避免闪烁）
+        if(isClustering){
+            $('#heading-scatter-pca').text('PCA降维可视化');
+            $('#heading-scatter-tsne').text('t-SNE可视化');
+            $('#hint-scatter-pca').html('&#128161; PCA 降维后的数据分布，不同颜色代表不同聚类，同色点越集中聚类越紧密');
+            $('#hint-scatter-tsne').html('&#128161; t-SNE 降维可视化，保留局部邻域结构，同色点越集中聚类越紧密');
+        } else if(isAnomaly){
+            $('#heading-scatter-pca').text('异常检测 - PCA散点图');
+            $('#heading-scatter-tsne').text('异常检测 - t-SNE散点图');
+            $('#hint-scatter-pca').html('&#128161; PCA降维后的数据分布，绿色=正常样本，红色=异常样本');
+            $('#hint-scatter-tsne').html('&#128161; t-SNE降维后的数据分布，绿色=正常样本，红色=异常样本');
+        } else if(isDimReduction){
+            $('#heading-scatter-pca').text('PCA降维可视化');
+            $('#heading-scatter-tsne').text('t-SNE可视化');
+            $('#hint-scatter-pca').html('&#128161; PCA 降维后的数据分布，观察数据在低维空间中的结构');
+            $('#hint-scatter-tsne').html('&#128161; t-SNE 降维可视化，保留局部邻域结构');
+        }
+
+        $('#charts-area').show();
+
+        // 渲染摘要
+        var html = '';
+        if(isClustering){
+            html += '<div class="row g-2">';
+            html += '<div class="col-lg-3"><strong>任务名称:</strong> ' + r.task_name + '</div>';
+            html += '<div class="col-lg-3"><strong>任务类型:</strong> 无监督-聚类分析</div>';
+            html += '<div class="col-lg-3"><strong>最佳聚类算法:</strong> ' + (r.cluster_best_algo || '-') + '</div>';
+            html += '<div class="col-lg-3"><strong>最佳轮廓系数:</strong> ' + (r.cluster_best_score !== null ? r.cluster_best_score : '-') + '</div>';
+            html += '</div>';
+            html += '<div class="row g-2 mt-1">';
+            html += '<div class="col-lg-3"><strong>聚类数:</strong> ' + (r.cluster_n_best || '-') + '</div>';
+            html += '<div class="col-lg-3"><strong>对比算法数:</strong> ' + (r.cluster_algorithms ? r.cluster_algorithms.length : 0) + '</div>';
+            html += '<div class="col-lg-3"><strong>降维方法:</strong> ' + (r.dim_reduction_methods ? r.dim_reduction_methods.join(', ') : '-') + '</div>';
+            html += '<div class="col-lg-3"><strong>PCA累计方差:</strong> ' + (r.pca_variance_explained !== null ? r.pca_variance_explained + '%' : '-') + '</div>';
+            html += '</div>';
+            if(r.cluster_algorithms && r.cluster_algorithms.length > 0){
+                html += '<div class="mt-2"><strong>算法详情:</strong> ';
+                $.each(r.cluster_algorithms, function(i, a){
+                    html += '<span class="badge-status status-pending me-1 mb-1">' + a.name + ' (k=' + a.n_clusters + ', 得分=' + (a.score !== null ? a.score : 'N/A') + ')</span>';
+                });
+                html += '</div>';
+            }
+        } else if(isAnomaly){
+            html += '<div class="row g-2">';
+            html += '<div class="col-lg-3"><strong>任务名称:</strong> ' + r.task_name + '</div>';
+            html += '<div class="col-lg-3"><strong>任务类型:</strong> 无监督-异常检测</div>';
+            html += '<div class="col-lg-3"><strong>异常样本数:</strong> <span class="text-danger">' + r.n_anomalies + '</span></div>';
+            html += '<div class="col-lg-3"><strong>正常样本数:</strong> <span class="text-success">' + r.n_normal + '</span></div>';
+            html += '</div>';
+            html += '<div class="row g-2 mt-1">';
+            html += '<div class="col-lg-3"><strong>异常比例:</strong> ' + (r.anomaly_ratio !== null ? (r.anomaly_ratio * 100).toFixed(1) + '%' : '-') + '</div>';
+            html += '<div class="col-lg-3"><strong>预设污染度:</strong> ' + r.contamination + '</div>';
+            html += '<div class="col-lg-3"><strong>降维方法:</strong> ' + (r.dim_reduction_methods ? r.dim_reduction_methods.join(', ') : '-') + '</div>';
+            html += '<div class="col-lg-3"><strong>PCA累计方差:</strong> ' + (r.pca_variance_explained !== null ? r.pca_variance_explained + '%' : '-') + '</div>';
+            html += '</div>';
+        } else if(isDimReduction){
+            html += '<div class="row g-2">';
+            html += '<div class="col-lg-3"><strong>任务名称:</strong> ' + r.task_name + '</div>';
+            html += '<div class="col-lg-3"><strong>任务类型:</strong> 无监督-降维可视化</div>';
+            html += '<div class="col-lg-3"><strong>降维方法:</strong> ' + (r.dim_reduction_methods ? r.dim_reduction_methods.join(', ') : '-') + '</div>';
+            html += '<div class="col-lg-3"><strong>PCA累计方差:</strong> ' + (r.pca_variance_explained !== null ? r.pca_variance_explained + '%' : '-') + '</div>';
+            html += '</div>';
+        } else {
+            html += '<div class="row g-2">';
+            html += '<div class="col-lg-3"><strong>任务名称:</strong> ' + r.task_name + '</div>';
+            html += '<div class="col-lg-3"><strong>任务类型:</strong> ' + (r.task_type || '-') + '</div>';
+            html += '<div class="col-lg-3"><strong>最佳模型:</strong> ' + (r.model_name || '-') + '</div>';
+            html += '<div class="col-lg-3"><strong>最佳得分:</strong> ' + (r.best_score !== null ? r.best_score.toFixed(4) : '-') + '</div>';
+            html += '</div>';
+            html += '<div class="row g-2 mt-1">';
+            html += '<div class="col-lg-3"><strong>训练模型数:</strong> ' + (r.n_models_trained || '-') + '</div>';
+            html += '<div class="col-lg-6"><strong>选择特征:</strong> ' + (r.selected_features ? r.selected_features.join(', ') : '-') + '</div>';
+            html += '</div>';
+        }
+        $('#results-body').html(html);
+
+        // 下一步提示
+        var nextHtml = '<div class="alert alert-info mt-3" style="padding:8px 12px;">';
+        nextHtml += '<strong>下一步:</strong> ';
+        if(isSupervised){
+            nextHtml += '<a href="/predict/" class="alert-link">在线预测</a> | ';
+        }
+        nextHtml += '<a href="/tasks/" class="alert-link">查看所有任务</a> | ';
+        nextHtml += '<a href="/compare/" class="alert-link">任务对比</a>';
+        nextHtml += '</div>';
+        $('#results-body').append(nextHtml);
+
+        // 加载对应图表
+        if(isSupervised){
+            loadChart(taskId, 'model_comparison', 'chart-model-comparison');
+            loadChart(taskId, 'correlation', 'chart-correlation');
+            loadChart(taskId, 'feature_importance', 'chart-feature-importance');
+            loadChart(taskId, 'optimization', 'chart-optimization');
+        } else if(isClustering){
+            loadChart(taskId, 'elbow', 'chart-elbow', 'chart-elbow-wrap');
+            loadChart(taskId, 'cluster_comparison', 'chart-cluster-comparison', 'chart-cluster-comp-wrap');
+            loadChart(taskId, 'scree', 'chart-scree', 'chart-scree-wrap');
+            loadChart(taskId, 'scatter_pca', 'chart-scatter-pca', 'chart-scatter-pca-wrap');
+            loadChart(taskId, 'scatter_tsne', 'chart-scatter-tsne', 'chart-scatter-tsne-wrap');
+        } else if(isAnomaly){
+            loadChart(taskId, 'anomaly_summary', 'chart-anomaly-summary', 'chart-anomaly-summary-wrap');
+            loadChart(taskId, 'anomaly_score_distribution', 'chart-anomaly-score', 'chart-anomaly-score-wrap');
+            loadChart(taskId, 'scatter_pca', 'chart-scatter-pca', 'chart-scatter-pca-wrap');
+            loadChart(taskId, 'scatter_tsne', 'chart-scatter-tsne', 'chart-scatter-tsne-wrap');
+        } else if(isDimReduction){
+            loadChart(taskId, 'scree', 'chart-scree', 'chart-scree-wrap');
+            loadChart(taskId, 'scatter_pca', 'chart-scatter-pca', 'chart-scatter-pca-wrap');
+            loadChart(taskId, 'scatter_tsne', 'chart-scatter-tsne', 'chart-scatter-tsne-wrap');
+        }
+    });
+}
+
+// 轮询训练状态
+function startPolling(taskId){
+    var pollInterval = setInterval(function(){
+        $.get('/api/tasks/' + taskId + '/status/', function(resp){
+            if(resp.code !== 0) return;
+            var s = resp.data;
+            $('#train-status').show().removeClass('alert-success alert-danger alert-warning alert-info')
+                .addClass(s.status === 'running' ? 'alert-info' : s.status === 'completed' ? 'alert-success' : 'alert-danger')
+                .html(s.status_display + (s.error_msg ? ': ' + s.error_msg : ''));
+
+            // 更新进度面板
+            if(s.status === 'running' && s.progress && s.progress.stage){
+                var p = s.progress;
+                $('#progress-panel').show();
+                $('#queue-panel').hide();
+                $('#progress-bar').css('width', (p.percent||0) + '%');
+                $('#progress-percent').text((p.percent||0) + '%');
+                $('#progress-stage').text('阶段 ' + p.stage_index + '/' + p.total_stages + ': ' + p.stage_display);
+                if(p.log_lines && p.log_lines.length > 0){
+                    $('#progress-log').show();
+                    var logHtml = '';
+                    $.each(p.log_lines, function(i, line){
+                        logHtml += '<div><span style="color:var(--gray-500)">[' + line.time + ']</span> ' + line.msg + '</div>';
+                    });
+                    $('#progress-log').html(logHtml);
+                    var logEl = document.getElementById('progress-log');
+                    logEl.scrollTop = logEl.scrollHeight;
+                }
+            }
+
+            // 队列信息
+            if(s.status === 'pending' && s.queue_info){
+                $('#progress-panel').hide();
+                $('#queue-panel').remove();
+                var q = s.queue_info;
+                var qHtml = '<div id="queue-panel" class="alert alert-warning" style="margin-top:10px;padding:8px 12px;">';
+                qHtml += '<strong>排队中</strong> — 前方还有 <span class="text-danger">' + q.position + '</span> 个任务等待';
+                if(q.blocking_task){
+                    qHtml += '<br><small class="text-muted">正在执行: ' + q.blocking_task + '</small>';
+                }
+                qHtml += '</div>';
+                $('#train-status').after(qHtml);
+            }
+
+            if(s.status === 'completed'){
+                clearInterval(pollInterval);
+                $('#progress-panel').hide();
+                $('#queue-panel').remove();
+                $('#btn-train').prop('disabled', false).text('开始训练');
+                loadResults(taskId);
+            } else if(s.status === 'failed'){
+                clearInterval(pollInterval);
+                $('#progress-panel').hide();
+                $('#queue-panel').remove();
+                $('#btn-train').prop('disabled', false).text('开始训练');
+                $('#error-detail-panel').remove();
+                if(s.error_detail && s.error_detail.category){
+                    var ed = s.error_detail;
+                    var errHtml = '<div class="alert alert-danger" style="margin-top:10px;">';
+                    errHtml += '<h6 class="mb-2">' + (ed.icon||'') + ' ' + (ed.category_display||'错误') + '</h6>';
+                    errHtml += '<p>' + (ed.summary||s.error_msg) + '</p>';
+                    errHtml += '<hr style="margin:6px 0;">';
+                    errHtml += '<p class="text-info mb-0">💡 ' + (ed.suggestion||'请检查数据和配置后重试') + '</p>';
+                    errHtml += '</div>';
+                    errHtml += '<details><summary class="text-muted small" style="cursor:pointer;">技术详情</summary>';
+                    errHtml += '<pre class="small text-muted" style="white-space:pre-wrap;max-height:150px;overflow:auto;">' + (s.error_msg||'') + '</pre></details>';
+                    $('#train-status').after('<div id="error-detail-panel">' + errHtml + '</div>');
+                }
+            }
+        });
+    }, 2000);
+}
+
+// 切换训练模式显示/隐藏参数
+$('#train-mode').change(function(){
+    if($(this).val() === 'supervised'){
+        $('#supervised-params').show();
+        $('#unsupervised-params').hide();
+        $('#unsupervised-subtype-wrap').hide();
+        $('#anomaly-params').hide();
+        $('#dimreduction-params').hide();
+    } else {
+        $('#supervised-params').hide();
+        $('#unsupervised-subtype-wrap').show();
+        // 触发子类型切换以显示对应参数面板
+        $('#unsupervised-subtype').trigger('change');
+    }
+});
+
+// 切换无监督子类型
+$('#unsupervised-subtype').change(function(){
+    var sub = $(this).val();
+    $('#unsupervised-params').hide();
+    $('#anomaly-params').hide();
+    $('#dimreduction-params').hide();
+    if(sub === 'unsupervised.clustering'){
+        $('#unsupervised-params').show();
+    } else if(sub === 'unsupervised.anomaly'){
+        $('#anomaly-params').show();
+    } else if(sub === 'unsupervised.dim_reduction'){
+        $('#dimreduction-params').show();
+    }
+});
+
+// 切换监督学习特征选择方法（按方法显示对应参数输入框）
+function updateFeatureSelectionUI(){
+    var method = $('#param-selection-method').val();
+    $('#fs-f-test-params,#fs-kbest-params,#fs-mi-params').hide();
+    if(method === 'f_test'){
+        $('#fs-f-test-params').show();
+    } else if(method === 'kbest'){
+        $('#fs-kbest-params').show();
+    } else if(method === 'mutual_info'){
+        $('#fs-mi-params').show();
+    }
+}
+$('#param-selection-method').change(updateFeatureSelectionUI);
+
+// 收集当前参数
+function collectParams(){
+    var mode = $('#train-mode').val();
+    var params = {};
+    if(mode === 'supervised'){
+        params.task_type = 'supervised';
+        params.test_size = parseFloat($('#param-test-size').val()) || 0.2;
+        params.feature_selection_method = $('#param-selection-method').val();
+        var fsMethod = params.feature_selection_method;
+        if(fsMethod === 'kbest'){
+            params.n_features = parseInt($('#param-n-features').val()) || 10;
+        } else if(fsMethod === 'mutual_info'){
+            params.mi_threshold = parseFloat($('#param-mi-threshold').val()) || 0.05;
+        } else {
+            params.correlation_threshold = parseFloat($('#param-p-threshold').val()) || 0.05;
+        }
+        params.n_trials = parseInt($('#param-n-trials').val()) || 10;
+        params.cv_folds = parseInt($('#param-cv-folds').val()) || 3;
+        params.random_state = parseInt($('#param-random-state').val()) || 42;
+        params.scaler_type = $('#param-scaler-type').val() || 'standard';
+    } else {
+        var sub = $('#unsupervised-subtype').val();
+        params.task_type = sub;
+        if(sub === 'unsupervised.clustering'){
+            params.n_clusters = parseInt($('#param-n-clusters').val()) || 3;
+            params.n_clusters_range = [parseInt($('#param-k-min').val()) || 2, parseInt($('#param-k-max').val()) || 10];
+            params.dim_reduction = $('#param-dim-reduction').val() === 'true';
+            params.random_state = parseInt($('#param-random-state-u').val()) || 42;
+        } else if(sub === 'unsupervised.anomaly'){
+            params.contamination = parseFloat($('#param-contamination').val()) || 0.1;
+            params.random_state = parseInt($('#param-random-state-a').val()) || 42;
+        } else if(sub === 'unsupervised.dim_reduction'){
+            params.random_state = parseInt($('#param-random-state-d').val()) || 42;
+        }
+    }
+    return params;
+}
+
+// 开始训练
+$('#btn-train').click(function(){
+    var datasetId = $('#sel-dataset').val();
+    var taskName = $('#task-name').val().trim();
+    if(!datasetId){ showAlert('请选择数据集'); return; }
+    if(!taskName){ showAlert('请输入任务名称'); return; }
+    var p = collectParams();
+    $(this).prop('disabled', true).text('训练中...');
+    $('#error-detail-panel').remove();
+    $('#progress-panel').hide();
+    $('#train-status').show().removeClass('alert-success alert-danger').addClass('alert-info').text('运行中...');
+    $.ajax({
+        url: '/api/tasks/train/',
+        type: 'POST', contentType: 'application/json',
+        data: JSON.stringify({
+            dataset_id: parseInt(datasetId),
+            task_name: taskName,
+            task_type: p.task_type,
+            params: p,
+        }),
+        success: function(resp){
+            if(resp.code === 0){ startPolling(resp.data.task_id); }
+            else { showAlert(resp.msg); $('#btn-train').prop('disabled', false).text('开始训练'); }
+        }
+    });
+});
+
+// 窗口resize时自适应
+$(window).resize(function(){
+    $.each(charts, function(id, c){ if(c) c.resize(); });
+});
+
+// 初始化
+loadDatasets();
+
+// 如果URL带了 dataset_id 参数，等数据集加载完后自动选中
+var urlDatasetId = new URLSearchParams(window.location.search).get('dataset_id');
+if(urlDatasetId){
+    // loadDatasets 是异步的，用定时器等待下拉框填充
+    var autoSelectTimer = setInterval(function(){
+        if($('#sel-dataset option').length > 1){
+            $('#sel-dataset').val(urlDatasetId);
+            clearInterval(autoSelectTimer);
+        }
+    }, 200);
+    // 最多等 5 秒
+    setTimeout(function(){ clearInterval(autoSelectTimer); }, 5000);
+}
+
+// 如果URL带了task_id参数，直接加载该任务的图表
+var urlTaskId = '{{ task_id }}';
+if(urlTaskId){
+    $('#training-start-card').hide();
+    $('#train-status').show().removeClass('alert-info alert-danger').addClass('alert-success').text('已完成');
+    loadResults(parseInt(urlTaskId));
+}
+</script>
+{% endblock %}

@@ -1,0 +1,394 @@
+{% extends 'layout.html' %}
+
+{% block title %}任务对比 · MLPlatform{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">任务对比</li>
+{% endblock %}
+
+{% block content %}
+
+<div class="guide-card fade-in">
+    <div class="guide-icon"><i class="bi bi-binoculars"></i></div>
+    <div class="guide-body">
+        <p class="guide-title"><span class="guide-step">第 4 步</span>横向对比多个任务</p>
+        <p class="guide-text">勾选 2-5 个<strong>相同类型</strong>的已完成任务，系统会把它们的最佳得分、特征选择等指标放进一张表对比，高亮最优值，并用柱状图直观展示哪个任务表现更好。适合做实验调参时判断改动是否有效。</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span><i class="bi bi-bar-chart-line header-icon me-2"></i>任务对比</span>
+        <div id="task-pagination"></div>
+    </div>
+    <div class="card-body">
+        <!-- 任务选择区 -->
+        <div id="select-area">
+            <p class="text-muted">选择 2-5 个<strong>相同类型</strong>的已完成任务进行对比：</p>
+            <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                    <thead>
+                        <tr>
+                            <th style="width:30px;"><input type="checkbox" id="check-all"></th>
+                            <th>任务名称</th>
+                            <th>数据集</th>
+                            <th>类型</th>
+                            <th>创建时间</th>
+                        </tr>
+                    </thead>
+                    <tbody id="task-select-tbody"></tbody>
+                </table>
+            </div>
+            <button class="btn btn-ml" id="btn-compare" disabled>开始对比</button>
+            <span id="compare-hint" class="text-muted ms-2"></span>
+        </div>
+
+        <!-- 对比结果区 -->
+        <div id="compare-results" class="mt-4" style="display:none;">
+            <h5 id="compare-title" class="page-title"></h5>
+            <!-- 指标对比表 -->
+            <div id="metrics-table-wrap"></div>
+            <!-- 特征对比 -->
+            <div id="feature-compare-wrap" class="mt-4" style="display:none;"></div>
+            <!-- 图表对比 -->
+            <div id="chart-compare-wrap" class="mt-4" style="display:none;">
+                <h6 class="fw-semibold mb-2">模型性能对比</h6>
+                <div id="compare-chart" style="width:100%;height:400px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block js %}
+<script>
+var allTasks = [];
+var selectedType = null;
+var compareChart = null;
+var COMPARE_PAGE_SIZE = 10;
+var compareCurPage = 1;
+
+// 加载已完成任务列表（一次拉全部，前端分页；行只切换显隐，勾选状态跨页保留）
+$.get('/api/tasks/', function(resp){
+    if(resp.code !== 0) return;
+    allTasks = resp.data.filter(function(t){ return t.status === 'completed'; });
+    if(allTasks.length < 2){
+        $('#task-select-tbody').html('<tr><td colspan="5" class="text-center text-muted">至少需要 2 个已完成的任务才能对比</td></tr>');
+        $('#task-pagination').empty();
+        return;
+    }
+    compareCurPage = 1;
+    renderAllTaskRows();
+    applyComparePagination();
+});
+
+// 一次渲染全部任务行（带data-idx，供分页按索引切换显隐）
+function renderAllTaskRows(){
+    var rows = '';
+    $.each(allTasks, function(i, t){
+        rows += '<tr data-idx="' + i + '">' +
+            '<td><input type="checkbox" class="task-check" data-id="' + t.id + '" data-type="' + t.task_type + '"></td>' +
+            '<td>' + t.task_name + '</td>' +
+            '<td>' + (t.dataset_name || '-') + '</td>' +
+            '<td>' + (t.task_type_display || t.task_type) + '</td>' +
+            '<td>' + t.create_time + '</td>' +
+            '</tr>';
+    });
+    $('#task-select-tbody').html(rows);
+}
+
+// 按当前页切换行显隐 + 画分页栏（复用全局 renderPagination，翻页只切显隐、不重建 DOM）
+function applyComparePagination(){
+    var totalPages = Math.ceil(allTasks.length / COMPARE_PAGE_SIZE);
+    if(totalPages < 1) totalPages = 1;
+    if(compareCurPage > totalPages) compareCurPage = totalPages;
+    var start = (compareCurPage - 1) * COMPARE_PAGE_SIZE;
+    var end = start + COMPARE_PAGE_SIZE;
+    $('#task-select-tbody tr').each(function(){
+        var idx = parseInt($(this).data('idx'), 10);
+        $(this).css('display', (idx >= start && idx < end) ? '' : 'none');
+    });
+    renderPagination('#task-pagination', compareCurPage, totalPages, function(p){
+        compareCurPage = p;
+        applyComparePagination();
+    });
+    syncCompareCheckAll();
+}
+
+// 表头全选框反映「当前页可见行」的勾选状态
+function syncCompareCheckAll(){
+    var $checks = $('#task-select-tbody tr:visible .task-check');
+    if($checks.length === 0){ $('#check-all').prop('checked', false); return; }
+    $('#check-all').prop('checked', $checks.filter(':checked').length === $checks.length);
+}
+
+// 全选/全不选（仅作用于当前页可见行，各页各自独立）
+$('#check-all').change(function(){
+    var checked = $(this).prop('checked');
+    var $checks = $('#task-select-tbody tr:visible .task-check');
+    if(checked && $checks.length > 0){
+        // 全选时，根据当前页第一个任务的类型筛选
+        var firstType = $checks.first().data('type');
+        $checks.each(function(){
+            $(this).prop('checked', $(this).data('type') === firstType);
+        });
+    } else {
+        $checks.prop('checked', false);
+    }
+    updateCompareButton();
+});
+
+// 单个复选框
+$(document).on('change', '.task-check', function(){
+    var myType = $(this).data('type');
+    if($(this).prop('checked')){
+        // 取消不同类型的选中
+        $('.task-check').each(function(){
+            if($(this).data('type') !== myType){
+                $(this).prop('checked', false);
+            }
+        });
+        selectedType = myType;
+    }
+    syncCompareCheckAll();
+    updateCompareButton();
+});
+
+function updateCompareButton(){
+    var checked = $('.task-check:checked');
+    var count = checked.length;
+    if(count >= 2 && count <= 5){
+        $('#btn-compare').prop('disabled', false);
+        $('#compare-hint').text('已选 ' + count + ' 个任务');
+    } else {
+        $('#btn-compare').prop('disabled', true);
+        if(count > 0 && count < 2) $('#compare-hint').text('还需要选择至少 ' + (2 - count) + ' 个任务');
+        else if(count > 5) $('#compare-hint').text('最多选择 5 个任务');
+        else $('#compare-hint').text('');
+    }
+}
+
+// 执行对比
+$('#btn-compare').click(function(){
+    var ids = [];
+    $('.task-check:checked').each(function(){ ids.push($(this).data('id')); });
+    if(ids.length < 2) return;
+
+    $(this).prop('disabled', true).text('加载中...');
+
+    $.get('/api/tasks/compare/?ids=' + ids.join(','), function(resp){
+        $('#btn-compare').prop('disabled', false).text('开始对比');
+        if(resp.code !== 0){ showAlert(resp.msg); return; }
+        renderComparison(resp.data);
+    });
+});
+
+function renderComparison(data){
+    var tasks = data.tasks;
+    var taskType = data.task_type;
+
+    // 标题
+    var typeDisplay = {'supervised':'监督学习','unsupervised.clustering':'聚类分析','unsupervised.anomaly':'异常检测','unsupervised.dim_reduction':'降维可视化'};
+    $('#compare-title').text(typeDisplay[taskType] || taskType + ' — 任务对比');
+
+    // 指标对比表
+    var tableHtml = '<table class="table table-bordered table-sm"><thead><tr><th>指标</th>';
+    $.each(tasks, function(i, t){ tableHtml += '<th>' + t.task_name + '</th>'; });
+    tableHtml += '</tr></thead><tbody>';
+
+    if(taskType === 'supervised'){
+        tableHtml += buildRow('数据集', tasks, function(t){ return t.dataset_name; });
+        tableHtml += buildRow('最佳模型', tasks, function(t){ return t.best_model || '-'; });
+        tableHtml += buildScoreRow('最佳得分', tasks, function(t){ return t.best_score; });
+        tableHtml += buildRow('特征数', tasks, function(t){ return t.n_features || '-'; });
+        tableHtml += buildRow('调参次数', tasks, function(t){ return t.n_trials || '-'; });
+        tableHtml += buildRow('创建时间', tasks, function(t){ return t.create_time; });
+    } else if(taskType === 'unsupervised.clustering'){
+        tableHtml += buildRow('数据集', tasks, function(t){ return t.dataset_name; });
+        tableHtml += buildRow('最佳算法', tasks, function(t){ return t.best_algo || '-'; });
+        tableHtml += buildScoreRow('轮廓系数', tasks, function(t){ return t.best_score; });
+        tableHtml += buildRow('聚类数', tasks, function(t){ return t.n_clusters || '-'; });
+    } else if(taskType === 'unsupervised.anomaly'){
+        tableHtml += buildRow('数据集', tasks, function(t){ return t.dataset_name; });
+        tableHtml += buildRow('异常样本数', tasks, function(t){ return t.n_anomalies !== undefined ? t.n_anomalies : '-'; });
+        tableHtml += buildRow('异常比例', tasks, function(t){ return t.anomaly_ratio !== null && t.anomaly_ratio !== undefined ? (t.anomaly_ratio * 100).toFixed(1) + '%' : '-'; });
+        tableHtml += buildRow('污染度', tasks, function(t){ return t.contamination || '-'; });
+    } else if(taskType === 'unsupervised.dim_reduction'){
+        tableHtml += buildRow('数据集', tasks, function(t){ return t.dataset_name; });
+        tableHtml += buildRow('降维方法', tasks, function(t){ return (t.dim_methods || []).join(', ') || '-'; });
+        tableHtml += buildRow('PCA方差解释', tasks, function(t){ return t.pca_variance !== null && t.pca_variance !== undefined ? (t.pca_variance * 100).toFixed(1) + '%' : '-'; });
+    }
+
+    tableHtml += '</tbody></table>';
+    $('#metrics-table-wrap').html(tableHtml);
+
+    // 特征对比（仅监督学习）
+    if(taskType === 'supervised'){
+        var featureHtml = '<h6 class="fw-semibold">特征对比</h6>';
+        var allFeatures = {};
+        $.each(tasks, function(i, t){
+            $.each(t.feature_list || [], function(j, f){ allFeatures[f] = (allFeatures[f] || 0) + 1; });
+        });
+        var commonFeatures = [];
+        var uniqueFeatures = {};
+        $.each(allFeatures, function(f, count){
+            if(count === tasks.length) commonFeatures.push(f);
+            else {
+                $.each(tasks, function(i, t){
+                    if((t.feature_list || []).indexOf(f) >= 0){
+                        uniqueFeatures[t.task_name] = uniqueFeatures[t.task_name] || [];
+                        uniqueFeatures[t.task_name].push(f);
+                    }
+                });
+            }
+        });
+
+        featureHtml += '<p class="mb-1"><strong>共同特征 (' + commonFeatures.length + '):</strong> ' + (commonFeatures.length > 0 ? commonFeatures.join(', ') : '无') + '</p>';
+        $.each(tasks, function(i, t){
+            var uf = uniqueFeatures[t.task_name] || [];
+            featureHtml += '<p class="mb-1"><strong>' + t.task_name + ' 独有 (' + uf.length + '):</strong> ' + (uf.length > 0 ? uf.join(', ') : '无') + '</p>';
+        });
+        $('#feature-compare-wrap').html(featureHtml).show();
+    } else {
+        $('#feature-compare-wrap').hide();
+    }
+
+    // 图表对比（监督学习：模型性能柱状图）
+    if(taskType === 'supervised'){
+        renderModelComparisonChart(tasks);
+        $('#chart-compare-wrap').show();
+    } else if(taskType === 'unsupervised.clustering'){
+        renderClusterComparisonChart(tasks);
+        $('#chart-compare-wrap').show();
+    } else {
+        $('#chart-compare-wrap').hide();
+    }
+
+    $('#compare-results').show();
+}
+
+function buildRow(label, tasks, getter){
+    var html = '<tr><td><strong>' + label + '</strong></td>';
+    $.each(tasks, function(i, t){ html += '<td>' + getter(t) + '</td>'; });
+    return html + '</tr>';
+}
+
+function buildScoreRow(label, tasks, getter){
+    var scores = [];
+    $.each(tasks, function(i, t){
+        var v = getter(t);
+        scores.push(v !== null && v !== undefined ? v : -Infinity);
+    });
+    var maxVal = Math.max.apply(null, scores);
+    var minVal = Math.min.apply(null, scores.filter(function(v){ return v !== -Infinity; }));
+
+    var html = '<tr><td><strong>' + label + '</strong></td>';
+    $.each(tasks, function(i, t){
+        var v = getter(t);
+        var text = v !== null && v !== undefined ? v.toFixed(4) : '-';
+        var cls = '';
+        if(v === maxVal) cls = ' class="text-success"';
+        else if(v === minVal && tasks.length > 2) cls = ' class="text-danger"';
+        html += '<td' + cls + '><strong>' + text + '</strong></td>';
+    });
+    return html + '</tr>';
+}
+
+function renderModelComparisonChart(tasks){
+    if(compareChart){ compareChart.dispose(); }
+    compareChart = echarts.init(document.getElementById('compare-chart'));
+    var taskNames = tasks.map(function(t){ return t.task_name; });
+
+    // 收集所有模型名称（去重，保持顺序）
+    var allModelNames = [];
+    var seenNames = {};
+    $.each(tasks, function(i, t){
+        $.each(t.models || [], function(j, m){
+            var name = m.model_name || m.name || ('Model ' + j);
+            if(!seenNames[name]){
+                seenNames[name] = true;
+                allModelNames.push(name);
+            }
+        });
+    });
+
+    // 判断指标字段：分类用 balanced_accuracy，回归用 adjusted_r_squared
+    var scoreField = 'balanced_accuracy';
+    if(tasks[0].models && tasks[0].models.length > 0){
+        var sample = tasks[0].models[0];
+        if(sample.adjusted_r_squared !== undefined && sample.balanced_accuracy === undefined){
+            scoreField = 'adjusted_r_squared';
+        }
+    }
+
+    var series = [];
+    $.each(tasks, function(i, t){
+        // 建立 model_name -> score 映射
+        var scoreMap = {};
+        $.each(t.models || [], function(j, m){
+            var name = m.model_name || m.name;
+            var score = m[scoreField];
+            if(score === null || score === undefined){
+                score = m.r_squared || m.accuracy || m.f1_score || 0;
+            }
+            scoreMap[name] = score;
+        });
+        series.push({
+            name: t.task_name,
+            type: 'bar',
+            data: $.map(allModelNames, function(name){
+                var v = scoreMap[name];
+                return v !== null && v !== undefined ? parseFloat(parseFloat(v).toFixed(4)) : null;
+            })
+        });
+    });
+
+    compareChart.setOption(applyChartTheme({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        legend: { data: taskNames, top: 5 },
+        grid: { top: 40, bottom: 100, left: 60, right: 20 },
+        xAxis: { type: 'category', data: allModelNames, axisLabel: { rotate: 45, fontSize: 9, interval: 0 } },
+        yAxis: { type: 'value', name: scoreField === 'adjusted_r_squared' ? 'R²' : 'Accuracy' },
+        series: series,
+        // 取 Top 15 模型，太多会看不清
+        dataZoom: [{ type: 'slider', start: 0, end: Math.min(100, Math.round(150 / allModelNames.length)) }]
+    }, { barMode: 'group-series' }));
+}
+
+function renderClusterComparisonChart(tasks){
+    if(compareChart){ compareChart.dispose(); }
+    compareChart = echarts.init(document.getElementById('compare-chart'));
+    var algos = {};
+    $.each(tasks, function(i, t){
+        $.each(t.all_algorithms || [], function(j, a){
+            if(!algos[a.algorithm]) algos[a.algorithm] = [];
+            algos[a.algorithm].push({ task: t.task_name, score: a.silhouette_score });
+        });
+    });
+    var algoNames = Object.keys(algos);
+    var taskNames = tasks.map(function(t){ return t.task_name; });
+    var series = [];
+    $.each(taskNames, function(i, tn){
+        series.push({
+            name: tn, type: 'bar',
+            data: algoNames.map(function(a){
+                var entry = (algos[a] || []).find(function(e){ return e.task === tn; });
+                return entry && entry.score !== null ? parseFloat(entry.score.toFixed(4)) : 0;
+            })
+        });
+    });
+    compareChart.setOption(applyChartTheme({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        legend: { data: taskNames, top: 5 },
+        grid: { top: 40, bottom: 30, left: 60, right: 20 },
+        xAxis: { type: 'category', data: algoNames },
+        yAxis: { type: 'value', name: 'Silhouette Score' },
+        series: series
+    }, { barMode: 'group-series' }));
+}
+
+$(window).resize(function(){
+    if(compareChart) compareChart.resize();
+});
+</script>
+{% endblock %}

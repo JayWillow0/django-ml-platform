@@ -1,0 +1,598 @@
+{% extends 'layout.html' %}
+{% load static %}
+
+{% block title %}帮助文档 · MLPlatform{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">帮助文档</li>
+{% endblock %}
+
+{% block css %}
+<link rel="stylesheet" href="{% static 'plugins/katex/katex.min.css' %}">
+<link rel="stylesheet" href="{% static 'css/help.css' %}?v=20260629">
+{% endblock %}
+
+{% block content %}
+<div class="docs-page fade-in">
+
+    {# ============ hero：算法工作流总览 ============ #}
+    <section class="docs-hero">
+        <h1 class="hero-title">算法工作流与使用边界</h1>
+        <p class="hero-lead">本文对应平台当前实现，说明数据如何进入模型、各步骤解决什么问题，以及结果应当如何解释。监督学习按下方主线运行；聚类、异常检测和降维属于独立的无监督分析入口。</p>
+        <div class="docs-flow">
+            <div class="docs-flow-item">
+                <div class="flow-no">01</div>
+                <div class="flow-name">数据导入</div>
+                <div class="flow-desc">上传 / 统计</div>
+            </div>
+            <div class="docs-flow-item">
+                <div class="flow-no">02</div>
+                <div class="flow-name">数据预处理</div>
+                <div class="flow-desc">填充 / 编码 / 缩放</div>
+            </div>
+            <div class="docs-flow-item">
+                <div class="flow-no">03</div>
+                <div class="flow-name">特征选择</div>
+                <div class="flow-desc">F 检验 / Top-K / 互信息</div>
+            </div>
+            <div class="docs-flow-item">
+                <div class="flow-no">04</div>
+                <div class="flow-name">模型训练</div>
+                <div class="flow-desc">批量跑 ~30 个模型</div>
+            </div>
+            <div class="docs-flow-item">
+                <div class="flow-no">05</div>
+                <div class="flow-name">超参调优</div>
+                <div class="flow-desc">Optuna · TPE</div>
+            </div>
+            <div class="docs-flow-item">
+                <div class="flow-no">06</div>
+                <div class="flow-name">在线预测</div>
+                <div class="flow-desc">加载模型推理</div>
+            </div>
+        </div>
+        <p class="hero-note"><strong>监督学习：</strong>第 1–5、9 章；<strong>无监督分析：</strong>第 6–8 章；算法边界与搜索空间见第 10 章。</p>
+    </section>
+
+    <details class="docs-mobile-toc d-lg-none">
+        <summary>章节导航</summary>
+        <nav aria-label="移动端帮助文档目录">
+            <a href="#sec-1">01 数据导入与探索</a>
+            <a href="#sec-2">02 数据预处理</a>
+            <a href="#sec-3">03 相关性与特征选择</a>
+            <a href="#sec-4">04 监督学习：训练</a>
+            <a href="#sec-5">05 超参调优</a>
+            <a href="#sec-6">06 聚类分析</a>
+            <a href="#sec-7">07 异常检测</a>
+            <a href="#sec-8">08 降维可视化</a>
+            <a href="#sec-9">09 在线预测</a>
+            <a href="#sec-10">10 内置算法汇总</a>
+            <a href="#sec-11">11 延伸阅读</a>
+        </nav>
+    </details>
+
+    <div class="row g-4">
+        {# ============ 正文 ============ #}
+        <div class="col-lg-9">
+            <article class="docs-body" id="docs-content">
+
+                {# ---------- 第 1 章 ---------- #}
+                <h2 id="sec-1"><span class="docs-chapno">01</span>数据导入与探索</h2>
+                <p>上传 CSV 或 Excel 文件后，平台先执行<span class="term">数据探索</span>（Exploratory Data Analysis, EDA），再进入训练。该阶段用于识别缺失率、常数列、唯一值数量和高相关变量等基础问题。</p>
+                <p>平台会依次尝试 utf-8、utf-8-sig、gbk、gb2312 和 latin-1 编码，以降低中文数据读取失败的概率。文件载入后计算以下<span class="term">描述性统计</span>：</p>
+                <ul>
+                    <li><strong>数值列</strong>：均值、标准差、最小值、四分位数、最大值、唯一值数；</li>
+                    <li><strong>分类列</strong>：唯一值数、最常见值及其出现次数；</li>
+                    <li><strong>相关矩阵</strong>：数值列两两之间的 Pearson 相关系数（仅当列数 ≤ 50 时计算，列太多既慢又看不出规律）；</li>
+                    <li><strong>缺失分布</strong>：总缺失单元格数、缺失比例、按列统计。</li>
+                </ul>
+                <p><span class="term">相关矩阵</span>用得最多的是 Pearson 相关系数，衡量两个数值变量的线性相关程度，取值 −1 到 1：</p>
+                <div class="docs-formula">
+                    $$r = \frac{\sum_{i=1}^{n}(x_i - \bar{x})(y_i - \bar{y})}{\sqrt{\sum_{i=1}^{n}(x_i - \bar{x})^2}\;\sqrt{\sum_{i=1}^{n}(y_i - \bar{y})^2}}$$
+                    <span class="formula-caption">Pearson 相关系数：|r| 越接近 1 线性相关性越强；接近 0 不代表无关，只代表无线性关系</span>
+                </div>
+                <p>相关矩阵主要用于发现候选冗余特征，并粗筛与目标存在线性关系的变量。|r| 较高说明两列信息重叠，但不能只凭固定阈值直接删除其中一列；还要结合测量含义、数据泄漏风险和模型对共线性的敏感程度判断。Pearson 只能描述线性关系，非线性依赖可结合互信息分析。</p>
+
+                {# ---------- 第 2 章 ---------- #}
+                <h2 id="sec-2"><span class="docs-chapno">02</span>数据预处理（特征工程基础）</h2>
+                <p>这一步把原始数据转换为模型可处理的数值表示，主要包括<strong>补缺失、编码分类列、缩放数值列</strong>。它属于<span class="term">特征工程</span>（Feature Engineering）的基础环节。预处理不会自动改善数据质量，但可以避免缺失值、量纲和类别表示方式给模型引入额外偏差。</p>
+
+                <h3>缺失值填充</h3>
+                <p>平台使用的大多数估计器不能直接处理 NaN，因此需要先填充。数值列默认采用<strong>中位数</strong>，也可选择均值。中位数对极端值不敏感，更适合偏态分布；均值则更适合分布较对称、异常值已经处理的变量。</p>
+                <div class="docs-formula">
+                    $$\tilde{x} = \text{median}(x_1, x_2, \dots, x_n)$$
+                    <span class="formula-caption">中位数：排序后取中间值，抗异常值</span>
+                </div>
+
+                <h3>分类编码</h3>
+                <p>scikit-learn 的多数估计器要求数值输入，因此需要把「北京/上海/广州」等类别转换为数值表示。平台使用<span class="term">独热编码</span>（One-Hot Encoding）：每个类别展开为一个 0/1 列。例如「城市」有三个取值时，会生成 <code>city_北京</code>、<code>city_上海</code>、<code>city_广州</code> 三列。</p>
+                <div class="docs-note">
+                    <div class="docs-note-title"><i class="bi bi-info-circle"></i>独热编码的代价：维度灾难</div>
+                    <p>一个包含 1000 个取值的高基数分类列，独热编码后最多会展开为 1000 列，导致矩阵稀疏、内存占用增加，并削弱基于距离的方法。可根据变量含义选择频数编码、哈希编码、带交叉验证的目标编码、支持原生类别特征的模型，或确认无预测价值后剔除。目标编码必须在训练折内计算，避免标签泄漏。</p>
+                </div>
+
+                <h3>数值缩放</h3>
+                <p>不同列的量纲可能差几个数量级（年龄 0–100，收入 0–1,000,000）。基于距离或梯度的模型会被大量纲列主导，所以需要缩放到同一尺度。平台默认 <span class="term">标准化</span>（StandardScaler，Z-score），可选<span class="term">归一化</span>（MinMaxScaler，压到 0–1）：</p>
+                <div class="docs-formula">
+                    $$z = \frac{x - \mu}{\sigma} \qquad\qquad x_{\text{scaled}} = \frac{x - x_{\min}}{x_{\max} - x_{\min}}$$
+                    <span class="formula-caption">左：Z-score 标准化（均值 0、方差 1）；右：Min-Max 归一化（压到 [0,1]）</span>
+                </div>
+                <p>KNN、带核 SVM 以及依赖梯度优化或正则化的线性模型通常需要缩放，否则距离、间隔或惩罚项会被大量纲特征主导。决策树及其常见集成模型按单特征阈值划分，对单调缩放通常不敏感，但统一预处理仍有利于平台批量比较不同模型。</p>
+
+                <h3>目标编码</h3>
+                <p>分类任务里，如果目标列是文本标签（「正常/故障」），平台会用 LabelEncoder 把它映射成 0/1/2…，预测完成后再反向解码回原文，你看到的还是可读的中文标签。</p>
+                <div class="docs-note">
+                    <div class="docs-note-title"><i class="bi bi-shield-check"></i>训练与预测必须用同一套预处理</div>
+                    <p>预测新数据时，平台加载训练阶段拟合的预处理器，复用相同的填充值、缩放统计量和编码规则。平台通过 joblib 保存完整流水线，降低训练与预测处理不一致的风险。</p>
+                </div>
+
+                {# ---------- 第 3 章 ---------- #}
+                <h2 id="sec-3"><span class="docs-chapno">03</span>相关性分析与特征选择</h2>
+                <p>并非所有列都对预测有用——噪声特征只会添乱。特征选择的目标是剔除冗余和无关列，留下真正有用的。平台先做<strong>相关性分析</strong>给每个特征打分，再按分数筛。</p>
+
+                <h3>相关性分析（打分）</h3>
+                <p>不同任务使用不同统计量：</p>
+                <ul>
+                    <li><strong>回归任务</strong>：基于单变量线性回归的 F 检验、Pearson 相关、互信息；</li>
+                    <li><strong>分类任务</strong>：ANOVA F 检验、互信息。</li>
+                </ul>
+                <p>回归任务中的单变量 F 检验可由 Pearson 相关系数换算，用来检验线性关系是否显著：</p>
+                <div class="docs-formula">
+                    $$F = \frac{r^2}{1-r^2}(n-2)$$
+                    <span class="formula-caption">回归 F 检验：r 为特征与连续目标的 Pearson 相关系数，n 为样本数</span>
+                </div>
+                <p>分类任务采用 ANOVA F 检验，比较各类别之间与类别内部的方差：</p>
+                <div class="docs-formula">
+                    $$F = \frac{SS_B / (k-1)}{SS_W / (n-k)}$$
+                    <span class="formula-caption">分类 ANOVA F 检验：组间差异相对组内波动越大，F 越大</span>
+                </div>
+                <p>互信息能捕捉非线性关系，度量「知道 X 后，Y 的不确定性下降了多少」：</p>
+                <div class="docs-formula">
+                    $$I(X;Y) = \sum_{x}\sum_{y} p(x,y)\log\frac{p(x,y)}{p(x)\,p(y)}$$
+                    <span class="formula-caption">互信息：= 0 表示 X 与 Y 独立；&gt; 0 表示有依赖（含非线性）</span>
+                </div>
+
+                <h3>特征选择（筛选）</h3>
+                <p>平台提供三种筛选策略，对应不同场景：</p>
+                <ul>
+                    <li><strong>f_test</strong>（默认）：保留 p 值 ≤ 0.05 的特征，统计意义显著；</li>
+                    <li><strong>kbest</strong>：按 F 分数取前 K 个，要指定保留几个；</li>
+                    <li><strong>mutual_info</strong>：保留互信息 ≥ 阈值的特征，可识别部分非线性依赖。</li>
+                </ul>
+                <p>这些策略属于<span class="term">过滤法</span>（Filter）：不依赖具体预测模型，计算成本较低，但不会考虑特征组合与模型之间的交互。包装法（Wrapper）通过反复训练模型评价特征子集；嵌入法（Embedded）则在模型训练过程中完成选择，例如 Lasso 和树模型。平台目前实现过滤法。</p>
+                <div class="docs-note">
+                    <div class="docs-note-title"><i class="bi bi-lightbulb"></i>为什么要做特征选择</div>
+                    <p>三个实际收益：减少噪声列防过拟合；降维后训练更快、调参更省；留下的特征可解释性更强，你能跟业务方解释「模型主要靠哪几个变量」。注意平台没有实现方差阈值、VIF 共线性剔除、RFE 递归消除，这些需求要靠 f_test / 相关矩阵手动把关。</p>
+                </div>
+
+                {# ---------- 第 4 章 ---------- #}
+                <h2 id="sec-4"><span class="docs-chapno">04</span>监督学习：模型训练</h2>
+                <p>监督学习指「有答案」的学习：数据里有一列目标（要预测的东西），模型从输入特征学规律去逼近它。目标连续（如房价、明日销量）是<strong>回归</strong>；目标离散（如正常/故障、流失/留存）是<strong>分类</strong>。平台的 <code>auto</code> 模式会按目标列的唯一值数量和占比自动判断走哪条路。</p>
+
+                <h3>批量训练：建立候选模型基线</h3>
+                <p>平台通过 lazypredict 批量训练约 30 个 scikit-learn 常用模型，并按统一指标排序。这个阶段用于快速建立基线和筛选候选模型，不代表排名第一的模型已经具备上线条件；还需要结合交叉验证稳定性、误差分布、推理成本和业务约束判断。</p>
+
+                <h3>训练 / 测试集划分</h3>
+                <p>模型不能用参与拟合的数据评估泛化能力。平台先按比例划分训练集与测试集；候选模型比较和超参数搜索只使用训练集，测试集在模型与参数确定后评估一次。分类任务采用<span class="term">分层抽样</span>（stratify），尽量保持两部分的类别比例一致。最终保存的模型在训练集上拟合，测试集不参与重训。</p>
+
+                <h3>评估指标</h3>
+                <p>回归任务看预测值偏离真值的程度：</p>
+                <div class="docs-formula">
+                    $$R^2 = 1 - \frac{\sum_{i}(y_i - \hat{y}_i)^2}{\sum_{i}(y_i - \bar{y})^2} \qquad R^2_{\text{adj}} = 1 - \frac{(1-R^2)(n-1)}{n-p-1}$$
+                    <span class="formula-caption">R² 越接近 1 越好；Adjusted R² 在 R² 基础上按特征数 p 惩罚——加无用特征 R² 不降反升的假象会被戳穿</span>
+                </div>
+                <div class="docs-formula">
+                    $$\text{RMSE} = \sqrt{\frac{1}{n}\sum_{i}(y_i - \hat{y}_i)^2} \qquad \text{MAE} = \frac{1}{n}\sum_{i}|y_i - \hat{y}_i|$$
+                    <span class="formula-caption">RMSE 对大误差更敏感（平方放大）；MAE 更稳健、单位和目标一致、好解释</span>
+                </div>
+                <p>类别不平衡时（例如故障样本只占 2%），普通准确率容易被多数类主导：全部预测为「正常」也能得到 98% 的准确率。平台因此用<span class="term">平衡准确率</span>（Balanced Accuracy）作为主排名指标，即先计算各类别召回率，再取宏平均。此外还可结合 F1 和 ROC-AUC 判断。</p>
+                <div class="docs-note">
+                    <div class="docs-note-title"><i class="bi bi-bar-chart"></i>排名口径</div>
+                    <p>回归任务按 <strong>Adjusted R²</strong> 排名，用特征数量修正普通 R²；分类任务按 <strong>Balanced Accuracy</strong> 排名，降低多数类占比对结果的影响。两者仍需结合测试集误差和业务代价解释，不能单独代表模型质量。</p>
+                </div>
+
+                {# ---------- 第 5 章 ---------- #}
+                <h2 id="sec-5"><span class="docs-chapno">05</span>超参数调优（Optuna）</h2>
+                <p>模型有两类参数：<strong>参数</strong>是模型自己从数据学出来的（如线性回归的权重），<span class="term">超参数</span>是你在训练前设定的、模型学不出来的（如随机森林的树数量、SVM 的核函数、正则化强度）。超参数设得好不好，性能能差一截，所以需要调优。</p>
+
+                <h3>为什么用 Optuna 而不是网格搜索</h3>
+                <p>网格搜索（Grid Search）把所有超参组合穷举一遍，组合数爆炸、大量算力浪费在差的区域。<span class="term">贝叶斯优化</span>（Bayesian Optimization）会根据之前试过的结果，判断哪个区域更可能有好的超参，把搜索集中过去。平台用 Optuna 的 <span class="term">TPE</span>（Tree-structured Parzen Estimator）算法，核心是用两个概率分布分别建模「好结果」和「坏结果」的超参，然后按期望改进采样：</p>
+                <div class="docs-formula">
+                    $$EI(x) = \mathbb{E}\big[\max(0,\; f^* - f(x))\big]$$
+                    <span class="formula-caption">期望改进（Expected Improvement）：优先尝试「可能比当前最优 f* 更好」的超参组合</span>
+                </div>
+                <p>在相同试验预算下，TPE 通常比网格/随机搜索更早找到高质量解。</p>
+
+                <h3>交叉验证：调参的评分依据</h3>
+                <p>调参阶段不使用测试集。平台通过<span class="term">交叉验证</span>（Cross-Validation）把训练集划分为 K 份（默认 3 折），轮流使用 1 份验证、其余部分训练，并以 K 次得分的平均值评价超参数组合。每一折都会独立拟合缺失值填充、缩放、独热编码和特征选择，验证折不参与这些统计量的学习。回归使用 R²，分类使用平衡准确率。</p>
+
+                <h3>正则化：调参里最常见的超参</h3>
+                <p>很多模型带正则项，用系数 α（或其倒数 C）控制模型复杂度，防止过拟合：</p>
+                <div class="docs-formula">
+                    $$\min_{w}\; \lVert Xw - y\rVert^2 + \alpha\lVert w\rVert^2$$
+                    <span class="formula-caption">岭回归（Ridge）的 L2 正则：α 越大约束越强、权重越小、模型越简单；α → 0 退化为普通最小二乘</span>
+                </div>
+                <p>α 过大可能造成欠拟合，过小则可能增加过拟合风险；交叉验证用于在当前数据和评估指标下寻找合适的约束强度。</p>
+                <div class="docs-note">
+                    <div class="docs-note-title"><i class="bi bi-diagram-3"></i>调参范围</div>
+                    <p>平台为每个常用模型内置了搜索空间（哪些超参、取值范围见第 10 章）。对没内置空间的模型，会扫描它的参数列表，按常见参数名（alpha、C、n_estimators、max_depth…）自动生成回退空间。默认 10 次试验、3 折交叉验证。</p>
+                </div>
+
+                {# ---------- 第 6 章 ---------- #}
+                <h2 id="sec-6"><span class="docs-chapno">06</span>无监督学习：聚类分析</h2>
+                <p>聚类（Clustering）不依赖目标列，而是按样本之间的相似性寻找分组结构。常见场景包括客户分群、用户行为分段和数据模式探索。平台会并行比较 5 种算法；选择结果时既要看内部评价指标，也要检查不同随机种子或采样条件下的稳定性，并判断分组是否具有业务含义。</p>
+
+                <h3>KMeans：需要预先指定簇数</h3>
+                <p>KMeans 把样本分到最近的簇中心，反复更新中心直到稳定。它的目标是最小化簇内平方和（每个样本到自己簇中心的距离平方和）：</p>
+                <div class="docs-formula">
+                    $$J = \sum_{k=1}^{K}\sum_{x \in C_k}\lVert x - \mu_k\rVert^2$$
+                    <span class="formula-caption">KMeans 目标函数：K 是簇数，μ_k 是第 k 个簇中心；J 越小说明簇内越紧凑</span>
+                </div>
+                <p>KMeans 需要预先指定 K。平台通过<span class="term">肘部法</span>（Elbow Method）计算 K=2–10 时的簇内平方和。当曲线从快速下降转为平缓，继续增加簇数的边际收益开始降低。拐点只是候选 K，不一定清晰或唯一，应与轮廓系数、结果稳定性和业务可解释性共同判断。</p>
+                <figure class="docs-figure">
+                    <img src="{% static 'img/help-illustrations/01-kmeans-elbow.png' %}"
+                         alt="小空我压弯一条前陡后缓的下降曲线，标记增加簇数后收益趋缓的位置"
+                         width="1672" height="400" loading="lazy" decoding="async">
+                    <figcaption>图 1：肘部法原理示意。拐点表示边际收益趋缓，不是平台运行结果，也不代表唯一正确的 K。</figcaption>
+                </figure>
+
+                <h3>怎么判断聚得好不好：轮廓系数</h3>
+                <p>聚类没有「标准答案」，需要一个不依赖标签的质量指标。平台用<span class="term">轮廓系数</span>（Silhouette Score），范围 −1 到 1：</p>
+                <div class="docs-formula">
+                    $$s = \frac{b - a}{\max(a,\, b)}$$
+                    <span class="formula-caption">a = 同簇内样本到彼此的平均距离（越小越紧凑）；b = 到最近其他簇样本的平均距离（越大越分离）；s 接近 1 说明既紧凑又分离</span>
+                </div>
+
+                <h3>其余四种算法</h3>
+                <ul>
+                    <li><strong>DBSCAN</strong>：基于密度的聚类，能自动确定簇数并识别噪声点，适合形状不规则的簇。平台当前固定使用 eps=0.5、min_samples=5；这两个参数对特征尺度和数据密度敏感，因此需要先缩放数值特征，并结合结果判断默认值是否适用。</li>
+                    <li><strong>层次聚类</strong>（Agglomerative）：自底向上合并，能产出树状结构，适合想看层次关系的场景。</li>
+                    <li><strong>谱聚类</strong>（Spectral）：基于图论的相似度矩阵，擅长非凸形状（如同心圆）的簇。</li>
+                    <li><strong>高斯混合</strong>（GMM）：假设每个簇服从一个高斯分布，给出的是「属于每个簇的概率」（软划分）。用 BIC / AIC 选簇数——在拟合优度和模型复杂度间折中：</li>
+                </ul>
+                <div class="docs-formula">
+                    $$BIC = -2\ln\hat{L} + k\ln n \qquad AIC = -2\ln\hat{L} + 2k$$
+                    <span class="formula-caption">k 是参数个数，n 是样本量；BIC 对复杂模型惩罚更重，倾向于更简单的模型</span>
+                </div>
+
+                {# ---------- 第 7 章 ---------- #}
+                <h2 id="sec-7"><span class="docs-chapno">07</span>无监督学习：异常检测</h2>
+                <p><span class="term">异常检测</span>（Anomaly Detection）找的是「和大多数显著不同」的样本——欺诈交易、设备早期故障、传感器漂移。平台用<span class="term">孤立森林</span>（Isolation Forest）。</p>
+                <p>孤立森林随机选择特征和切分点，逐步把样本分隔开。<strong>与多数样本差异较大的点通常经过较少切分就会被孤立</strong>，因此平均路径较短。原始论文使用以下形式定义异常程度：</p>
+                <div class="docs-formula">
+                    $$s(x) = 2^{-\frac{E[h(x)]}{c(n)}}$$
+                    <span class="formula-caption">异常评分：E[h(x)] 是样本 x 的平均路径长度，c(n) 是归一化常数；路径越短评分越接近 1（越异常）</span>
+                </div>
+                <h3>contamination：异常比例</h3>
+                <p>平台实际保存的是 scikit-learn 的 <code>decision_function</code>：数值越低，样本越偏向异常，0 是分类边界。<code>contamination</code>（污染度）表示预期异常比例，范围 0.01–0.5，默认 0.1。它用于确定决策阈值，不改变样本之间的异常排序；设得越大，被标记为异常的样本通常越多。该值应根据已知故障率、人工复核成本或历史数据分布设定。</p>
+
+                {# ---------- 第 8 章 ---------- #}
+                <h2 id="sec-8"><span class="docs-chapno">08</span>无监督学习：降维可视化</h2>
+                <p>真实数据通常包含几十到上百个特征，无法直接在平面中观察。降维把样本映射到 2 维，用于检查局部聚集、分离和异常结构。<span class="term">降维</span>（Dimensionality Reduction）与特征选择不同：特征选择保留部分原始列，降维则由原始特征组合出新的坐标。</p>
+
+                <h3>PCA：保全局方差</h3>
+                <p><span class="term">主成分分析</span>（PCA）是线性降维方法。它寻找数据方差最大的正交方向，并将样本投影到这些方向。设 X 已按列中心化，协方差矩阵的特征值分解为：</p>
+                <div class="docs-formula">
+                    $$C = \frac{1}{n}X^{\top}X, \qquad C\, v_i = \lambda_i v_i$$
+                    <span class="formula-caption">协方差矩阵 C 的特征向量 v_i 是主成分方向，特征值 λ_i 衡量该方向上的方差大小</span>
+                </div>
+                <p>取前 2 个特征值最大的方向画图。每个主成分保留了多少原始信息，看<span class="term">方差解释率</span>：</p>
+                <div class="docs-formula">
+                    $$\text{explained ratio}_i = \frac{\lambda_i}{\sum_j \lambda_j}$$
+                    <span class="formula-caption">碎石图（Scree Plot）：画各主成分的方差解释率和累积值，判断降到 2 维丢了多少信息</span>
+                </div>
+
+                <h3>t-SNE：保局部结构</h3>
+                <p>PCA 保留全局方差，但难以展开复杂的非线性流形。<span class="term">t-SNE</span> 通过概率分布建模样本的近邻关系，重点保持局部邻域，因此适合探索二维结构。它计算成本较高，结果受随机种子和超参数影响，簇间距离及方向也不具备直接物理含义。scikit-learn 的 t-SNE 没有面向新样本的稳定 <code>transform</code> 接口，因此不适合作为生产预测流水线中的常规特征变换。数据超过 1 万行时，平台会提示计算可能较慢。</p>
+                <figure class="docs-figure">
+                    <img src="{% static 'img/help-illustrations/02-dimensionality-reduction.png' %}"
+                         alt="小空我操作手摇装置，把高维线团压缩成包含三个点簇的二维散点图"
+                         width="1672" height="400" loading="lazy" decoding="async">
+                    <figcaption>图 2：高维数据映射到二维的原理示意。右侧点簇仅说明投影后的结构可见，不是平台运行结果。</figcaption>
+                </figure>
+
+                {# ---------- 第 9 章 ---------- #}
+                <h2 id="sec-9"><span class="docs-chapno">09</span>在线预测</h2>
+                <p>模型训好、调参完，最终目的是拿去预测新数据。在线预测这一步有几条不可破坏的规矩。</p>
+                <h3>加载与严格列名校验</h3>
+                <p>平台使用 <span class="term">joblib</span> 保存模型和预处理流水线，预测时一并加载。新数据必须包含训练所需的全部原始特征列，大小写和空格也必须一致；缺列时直接报错，避免静默补值造成特征错位。多余列会被忽略并记录提示。</p>
+                <h3>预处理复用与反解码</h3>
+                <p>新数据走训练时<strong>同一套</strong>预处理（同样的中位数、同样的缩放均值方差、同样的独热编码列），保证它和模型见过的训练数据分布一致。分类任务预测出的 0/1/2 再用 LabelEncoder 反向解码成原始中文标签，输出可直接读的 CSV/Excel。</p>
+                <div class="docs-note">
+                    <div class="docs-note-title"><i class="bi bi-exclamation-triangle"></i>预测阶段仍需监控的风险</div>
+                    <p>平台可以校验缺失列，并按训练时的列名和顺序处理数据，但无法自动判断单位是否变化或输入是否发生分布漂移。例如模型只用某一地区的数据训练，却用于另一个差异很大的地区预测，输入即使格式正确，也可能超出模型的适用域。这类风险需要通过数据范围、漂移指标和业务规则持续监控。</p>
+                </div>
+
+                {# ---------- 第 10 章 ---------- #}
+                <h2 id="sec-10"><span class="docs-chapno">10</span>内置算法汇总</h2>
+                <p>本章按算法家族整理平台当前支持的模型、适用场景和限制，并给出<strong>模型—超参数—Optuna 搜索范围</strong>对照表。监督模型由 lazypredict 提供约 30 个 scikit-learn 估计器，<strong>不含 XGBoost、LightGBM 和 CatBoost</strong>；降维支持 PCA 与 t-SNE，不含 UMAP；异常检测支持孤立森林，不含 LOF。</p>
+
+                <h3>为什么没有 XGBoost / LightGBM / CatBoost</h3>
+                <p>这三个模型族由独立的第三方包提供，不属于 scikit-learn。平台当前通过 lazypredict 调用 scikit-learn 估计器；若要纳入它们，需要增加依赖、模型注册和 Optuna 搜索空间，并分别适配早停、类别特征等接口。当前版本优先保持统一的训练与部署路径。</p>
+                <p>模型差异取决于数据规模、特征类型、超参数预算和评估口径，不能预设固定的精度差距。scikit-learn 的 <strong>HistGradientBoosting</strong> 同样采用直方图分箱以提高训练效率，可以作为提升树基线；以下场景更值得单独评估 XGBoost、LightGBM 或 CatBoost：</p>
+                <ul>
+                    <li><strong>样本量上百万</strong>：LightGBM 的训练速度和内存占用优势明显，sklearn 版会慢一截；</li>
+                    <li><strong>高基数类别特征</strong>（如用户 ID、商品编号）：CatBoost 的有序目标编码、LightGBM 的原生类别特征支持是专门优化，sklearn 版只能手动独热编码，容易触发维度灾难；</li>
+                    <li><strong>高精度集成</strong>：需要利用不同 boosting 实现的归纳偏置和误差差异构建集成。</li>
+                </ul>
+                <p>在工业和业务数据中，数据质量、验证方案、标签噪声与特征定义往往和模型选择同样重要。是否需要引入新的模型族，应由相同数据划分下的验证结果、训练成本和部署约束决定。</p>
+                <div class="docs-note">
+                    <div class="docs-note-title"><i class="bi bi-arrow-repeat"></i>平台的替代方案</div>
+                    <p>平台当前可用 <strong>HistGradientBoosting</strong> 作为直方图提升树基线，也可同时比较传统 <strong>GradientBoosting</strong> 与 Bagging 系的 <strong>RandomForest / ExtraTrees</strong>。建议先在统一验证口径下建立基线，再判断新增依赖是否带来足够收益。</p>
+                    <p>XGBoost、LightGBM 和 CatBoost 暂未集成；如需使用，需要扩展模型注册、调参空间与部署依赖。</p>
+                </div>
+
+                <h3>为什么没有 UMAP 和 LOF</h3>
+                <p>边界声明里还提到两个「没有」：降维没有 UMAP、异常检测没有 LOF。它们和上面三家 boosting 库性质类似——都是独立的、在某些场景更强的第三方方法，分别说清楚。</p>
+
+                <h4>UMAP（降维方向）</h4>
+                <p><span class="term">UMAP</span>（Uniform Manifold Approximation and Projection）是一种流形学习方法。它先根据近邻关系构建高维图，再优化低维图以保持局部拓扑。相较 t-SNE，UMAP 通常具有更好的计算扩展性，并提供新样本变换接口；对全局结构的保持程度仍取决于数据和超参数，不能仅凭二维图判断。</p>
+                <p>平台暂未集成 UMAP：它需要额外安装 <code>umap-learn</code>，且 <code>n_neighbors</code>、<code>min_dist</code> 等参数会明显影响结果，必须提供相应的调参和解释机制。当前版本使用 PCA 与 t-SNE 覆盖线性投影和局部结构探索。</p>
+                <p>若目标是探索高维数据的局部结构，可以使用平台现有的 t-SNE；若需要对新样本执行相同映射并将结果输入监督模型，当前实现不支持 UMAP 路径。PCA 提供稳定的线性变换和 <code>transform</code> 接口，可作为需要生产化降维时的基线，但仍应通过交叉验证确认信息损失是否可接受。</p>
+
+                <h4>LOF（异常检测方向）</h4>
+                <p><span class="term">LOF</span>（Local Outlier Factor，局部异常因子）是经典的<strong>基于密度</strong>的异常检测算法。思路很直观：正常点待在密集区域、和邻居一样热闹，异常点待在稀疏区域、明显比邻居冷清。它用「局部可达密度」衡量，并取该点密度相对邻居密度的比值作为异常得分：</p>
+                <div class="docs-formula">
+                    $$\mathrm{LOF}_k(A) = \frac{\displaystyle\frac{1}{|N_k(A)|}\sum_{B \in N_k(A)} \mathrm{lrd}(B)}{\mathrm{lrd}(A)}$$
+                    <span class="formula-caption">LOF：分子是 A 的 k 近邻的平均局部可达密度，分母是 A 自己的；比值 ≈ 1 说明 A 和邻居一样密（正常），&gt;&gt; 1 说明 A 明显比邻居稀疏（异常）</span>
+                </div>
+                <p>平台选择孤立森林而不是 LOF，主要因为 LOF 依赖近邻距离，高维下需要更谨慎地处理尺度和距离退化问题；在大样本下，近邻搜索的计算与存储成本也可能更高。孤立森林通常具有更好的规模扩展性，且平台只需暴露少量关键参数，因此更适合作为当前默认方案。</p>
+                <p>在<strong>低维且局部密度具有明确业务含义</strong>的场景，LOF 可能比孤立森林更贴合问题。是否先用 PCA 再做 LOF，需要验证降维是否保留了异常所依赖的局部结构；平台目前未集成该组合。</p>
+
+                <div class="algo-group">
+                    <div class="algo-head"><i class="bi bi-graph-up"></i>线性模型</div>
+                    <div class="algo-body">
+                        <p>代表：<strong>逻辑回归</strong>（LogisticRegression，分类）、<strong>岭回归 / Lasso</strong>（Ridge / Lasso，回归）、<strong>弹性网络</strong>（ElasticNet）、<strong>SGD</strong>（大规模数据）。它们通过线性决策函数建模，系数方向和大小较容易检查。</p>
+                        <dl>
+                            <dt>调参建议</dt><dd>正则强度 C ∈ [1e-3, 100] 对数搜索（分类）；Lasso 的 alpha ∈ [1e-4, 10]、ElasticNet 的 l1_ratio ∈ [0,1]；penalty 选 l1/l2/elasticnet。</dd>
+                            <dt>优势</dt><dd>训练速度快；在特征尺度和共线性得到适当处理时，模型系数便于分析。</dd>
+                            <dt>劣势</dt><dd>只能学线性关系；对异常值和未缩放数据敏感。</dd>
+                            <dt>适用场景</dt><dd>① 需要向业务解释「为什么这么预测」的场合（风控评分卡）；② 特征远多于样本的稀疏数据（文本 TF-IDF）。</dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <div class="algo-group">
+                    <div class="algo-head"><i class="bi bi-diagram-3"></i>决策树与随机森林</div>
+                    <div class="algo-body">
+                        <p>代表：<strong>决策树</strong>（DecisionTree）、<strong>随机森林</strong>（RandomForest）、<strong>极端随机树</strong>（ExtraTrees）。随机森林是<span class="term">Bagging</span>（装袋）的代表：训很多棵树，每棵看部分数据和特征，投票出结果。</p>
+                        <dl>
+                            <dt>调参建议</dt><dd>n_estimators ∈ [50, 500]；max_depth ∈ [3, 30]；min_samples_split ∈ [2, 20]；min_samples_leaf ∈ [1, 10]；max_features ∈ {sqrt, log2, None}。</dd>
+                            <dt>优势</dt><dd>不用缩放、能抓非线性、抗过拟合（森林）、给特征重要性；上手几乎不用调。</dd>
+                            <dt>劣势</dt><dd>单棵决策树极易过拟合；森林是黑盒、预测慢于线性模型；外推能力弱（回归时不会预测出训练范围外的值）。</dd>
+                            <dt>适用场景</dt><dd>① 表格数据的候选基线；② 同时包含数值与类别特征的数据。</dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <div class="algo-group">
+                    <div class="algo-head"><i class="bi bi-bar-chart-steps"></i>梯度提升</div>
+                    <div class="algo-body">
+                        <p>代表：<strong>梯度提升</strong>（GradientBoosting）、<strong>直方图梯度提升</strong>（HistGradientBoosting）、<strong>AdaBoost</strong>。思路和随机森林相反——树是<strong>串行</strong>加的，每棵新树专门纠正前面所有树的残差（预测错误）。</p>
+                        <dl>
+                            <dt>调参建议</dt><dd>n_estimators / max_iter ∈ [50, 500]；learning_rate ∈ [0.01, 0.3] 对数搜索；max_depth ∈ [3, 10]；subsample ∈ [0.6, 1]；HistGB 还可调 l2_regularization ∈ [1e-4, 10]。</dd>
+                            <dt>优势</dt><dd>表格数据上精度通常最高；HistGB 在大数据上很快。</dd>
+                            <dt>劣势</dt><dd>超参敏感（learning_rate × n_estimators 要配着调）；容易过拟合，需早停或正则；训练比随机森林慢。</dd>
+                            <dt>适用场景</dt><dd>① 精度优先的结构化数据竞赛/生产模型；② 中等规模数据上的最优单模型选择。</dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <div class="algo-group">
+                    <div class="algo-head"><i class="bi bi-bezier"></i>支持向量机（SVM）</div>
+                    <div class="algo-body">
+                        <p>代表：<strong>SVC / SVR</strong>、<strong>LinearSVC / LinearSVR</strong>、<strong>NuSVC / NuSVR</strong>。找一个最优超平面把不同类分开，最大化间隔。通过<span class="term">核函数</span>（kernel）把数据映射到高维，能处理非线性。</p>
+                        <dl>
+                            <dt>调参建议</dt><dd>C ∈ [1e-2, 100] 对数（惩罚强度）；kernel ∈ {rbf, linear, poly, sigmoid}；gamma ∈ {scale, auto}；poly 时 degree ∈ [2, 5]。</dd>
+                            <dt>优势</dt><dd>小样本高维下表现好；核技巧让它能拟合复杂边界；理论扎实。</dd>
+                            <dt>劣势</dt><dd>对特征尺度敏感，通常需要标准化；样本量增大后训练和内存开销上升；概率输出需要额外计算。</dd>
+                            <dt>适用场景</dt><dd>① 样本不多但特征多的分类（如基因表达）；② 需要清晰决策边界的二分类。</dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <div class="algo-group">
+                    <div class="algo-head"><i class="bi bi-people"></i>K 近邻（KNN）</div>
+                    <div class="algo-body">
+                        <p>代表：<strong>KNeighborsClassifier / Regressor</strong>。没有真正的「训练」——预测时找离新样本最近的 K 个邻居，投票（分类）或平均（回归）。是<span class="term">惰性学习</span>的代表。</p>
+                        <dl>
+                            <dt>调参建议</dt><dd>n_neighbors ∈ [3, 30]；weights ∈ {uniform, distance}；metric ∈ {euclidean, manhattan, minkowski}；p ∈ [1, 3]。</dd>
+                            <dt>优势</dt><dd>原理简单、无需训练、决策边界天然非线性。</dd>
+                            <dt>劣势</dt><dd>对特征尺度敏感，通常需要缩放；预测时要计算近邻距离，大数据下开销较高；高维空间中的距离区分度会下降。</dd>
+                            <dt>适用场景</dt><dd>① 中小规模、低维数据的快速基线；② 推荐系统里的近邻召回（用户/物品相似）。</dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <div class="algo-group">
+                    <div class="algo-head"><i class="bi bi-diagram-2"></i>聚类</div>
+                    <div class="algo-body">
+                        <p>代表：<strong>KMeans</strong>（指定 K，球形簇）、<strong>DBSCAN</strong>（密度，自动定簇数、识别噪声）、<strong>层次聚类</strong>、<strong>谱聚类</strong>、<strong>高斯混合 GMM</strong>（软划分、概率）。详见第 6 章。</p>
+                        <dl>
+                            <dt>调参建议</dt><dd>KMeans 调 n_clusters（肘部法则）；GMM 调 n_components（BIC/AIC）；DBSCAN 的 eps/min_samples 平台固定 0.5/5。</dd>
+                            <dt>优势</dt><dd>无监督、不需要标签就能发现数据结构。</dd>
+                            <dt>劣势</dt><dd>没有标准答案，质量靠轮廓系数等间接评估；对缩放和参数敏感。</dd>
+                            <dt>适用场景</dt><dd>① 客户分群（市场营销、用户画像）；② 作为监督学习的前置步骤（先用聚类生成新特征）。</dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <div class="algo-group">
+                    <div class="algo-head"><i class="bi bi-shield-exclamation"></i>异常检测</div>
+                    <div class="algo-body">
+                        <p>代表：<strong>孤立森林</strong>（IsolationForest）。详见第 7 章。通过随机划分孤立样本，异常点路径短。</p>
+                        <dl>
+                            <dt>调参建议</dt><dd>contamination ∈ [0.01, 0.5]（预期异常比例，决定阈值）；n_estimators 默认 100。</dd>
+                            <dt>优势</dt><dd>不假设数据分布、线性时间复杂度、对高维稳定。</dd>
+                            <dt>劣势</dt><dd>contamination 要靠经验或历史数据估；只给异常评分，不解释「为什么异常」。</dd>
+                            <dt>适用场景</dt><dd>① 设备/传感器早期故障检测；② 金融欺诈、刷单等异常行为筛查。</dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <div class="algo-group">
+                    <div class="algo-head"><i class="bi bi-bezier2"></i>降维</div>
+                    <div class="algo-body">
+                        <p>代表：<strong>PCA</strong>（线性、保方差、可逆性可解释）、<strong>t-SNE</strong>（非线性、保局部、仅可视化）。详见第 8 章。</p>
+                        <dl>
+                            <dt>调参建议</dt><dd>主要选 n_components（默认 2 用于可视化）；PCA 看方差解释率决定保留几个主成分；t-SNE 的 perplexity 平台按样本量自适应。</dd>
+                            <dt>优势</dt><dd>把高维数据变成人能看的 2 维图，辅助判断可分性。</dd>
+                            <dt>劣势</dt><dd>降维必然丢信息；t-SNE 坐标无物理含义、不能用于训练、大数据慢。</dd>
+                            <dt>适用场景</dt><dd>① 高维特征的可视化探索；② PCA 作为去相关 / 压缩手段（保留 95% 方差）。</dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <h3>监督模型 Optuna 超参数搜索范围</h3>
+                <p>平台先由 LazyPredict 选出训练集内部验证表现最好的模型，再只对该模型执行 Optuna。下表列出显式注册的搜索空间；方括号表示闭区间，“对数”表示按对数尺度采样。条件参数只在对应候选被选中时启用。</p>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th style="min-width:190px;">模型</th>
+                                <th style="min-width:180px;">优化超参数</th>
+                                <th style="min-width:420px;">搜索范围 / 候选值</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Ridge</td><td><code>alpha</code>、<code>fit_intercept</code>、<code>solver</code></td><td><code>alpha</code>=[1e-3, 100]（对数）；<code>fit_intercept</code>={true, false}；<code>solver</code>={auto, svd, cholesky, lsqr, sag, saga}</td></tr>
+                            <tr><td>RidgeCV</td><td><code>alpha_center</code>、<code>fit_intercept</code></td><td><code>alpha_center</code>=[1e-3, 100]（对数）；由中心值乘 {0.01, 0.1, 1, 10, 100} 后裁剪到 [1e-3, 100]，生成 <code>alphas</code> 候选组</td></tr>
+                            <tr><td>Lasso</td><td><code>alpha</code>、<code>fit_intercept</code>、<code>selection</code></td><td><code>alpha</code>=[1e-4, 10]（对数）；<code>fit_intercept</code>={true, false}；<code>selection</code>={cyclic, random}</td></tr>
+                            <tr><td>ElasticNet</td><td><code>alpha</code>、<code>l1_ratio</code>、<code>fit_intercept</code>、<code>selection</code></td><td><code>alpha</code>=[1e-4, 10]（对数）；<code>l1_ratio</code>=[0, 1]；其余同 Lasso</td></tr>
+                            <tr><td>LinearRegression<br>Lars / LassoLars</td><td><code>fit_intercept</code></td><td>{true, false}</td></tr>
+                            <tr><td>LogisticRegression</td><td><code>C</code>、<code>penalty</code>、<code>max_iter</code>；条件 <code>l1_ratio</code></td><td><code>C</code>=[1e-3, 100]（对数）；<code>penalty</code>={l1, l2, elasticnet}；<code>max_iter</code>=[100, 1000]；elasticnet 时 <code>l1_ratio</code>=[0, 1]；<code>solver</code> 固定 saga</td></tr>
+                            <tr><td>SGDRegressor<br>SGDClassifier</td><td><code>alpha</code>、<code>penalty</code>、<code>l1_ratio</code>、<code>learning_rate</code>、<code>eta0</code>、<code>max_iter</code></td><td><code>alpha</code>=[1e-5, 1]（对数）；<code>penalty</code>={l2, l1, elasticnet}；<code>l1_ratio</code>=[0, 1]；<code>learning_rate</code>={constant, optimal, invscaling, adaptive}；<code>eta0</code>=[1e-4, 0.1]（对数）；<code>max_iter</code>=[100, 2000]</td></tr>
+                            <tr><td>BayesianRidge<br>ARDRegression</td><td><code>alpha_1</code>、<code>alpha_2</code>、<code>lambda_1</code>、<code>lambda_2</code></td><td>四项均为 [1e-7, 1e-1]（对数）</td></tr>
+                            <tr><td>HuberRegressor</td><td><code>epsilon</code>、<code>alpha</code>、<code>max_iter</code></td><td><code>epsilon</code>=[1, 2]；<code>alpha</code>=[1e-5, 1]（对数）；<code>max_iter</code>=[100, 1000]</td></tr>
+                            <tr><td>DecisionTreeRegressor<br>DecisionTreeClassifier</td><td><code>max_depth</code>、<code>min_samples_split</code>、<code>min_samples_leaf</code>、<code>max_features</code></td><td><code>max_depth</code>=[2, 32]；<code>min_samples_split</code>=[2, 20]；<code>min_samples_leaf</code>=[1, 20]；<code>max_features</code>={sqrt, log2, None}</td></tr>
+                            <tr><td>RandomForestRegressor<br>RandomForestClassifier</td><td><code>n_estimators</code>、<code>max_depth</code>、<code>min_samples_split</code>、<code>min_samples_leaf</code>、<code>max_features</code></td><td><code>n_estimators</code>=[50, 500]；<code>max_depth</code>=[3, 30]；<code>min_samples_split</code>=[2, 20]；<code>min_samples_leaf</code>=[1, 10]；<code>max_features</code>={sqrt, log2, None}</td></tr>
+                            <tr><td>ExtraTreesRegressor<br>ExtraTreesClassifier</td><td><code>n_estimators</code>、<code>max_depth</code>、<code>min_samples_split</code>、<code>min_samples_leaf</code></td><td><code>n_estimators</code>=[50, 500]；<code>max_depth</code>=[3, 30]；<code>min_samples_split</code>=[2, 20]；<code>min_samples_leaf</code>=[1, 10]</td></tr>
+                            <tr><td>GradientBoostingRegressor<br>GradientBoostingClassifier</td><td><code>n_estimators</code>、<code>learning_rate</code>、<code>max_depth</code>、<code>min_samples_split</code>、<code>min_samples_leaf</code>、<code>subsample</code>、<code>max_features</code></td><td><code>n_estimators</code>=[50, 500]；<code>learning_rate</code>=[0.01, 0.3]（对数）；<code>max_depth</code>=[3, 10]；<code>min_samples_split</code>=[2, 20]；<code>min_samples_leaf</code>=[1, 10]；<code>subsample</code>=[0.6, 1]；<code>max_features</code>={sqrt, log2, None}</td></tr>
+                            <tr><td>AdaBoostRegressor<br>AdaBoostClassifier</td><td><code>n_estimators</code>、<code>learning_rate</code></td><td><code>n_estimators</code>=[20, 300]；<code>learning_rate</code>=[0.01, 2]（对数）</td></tr>
+                            <tr><td>HistGradientBoostingRegressor<br>HistGradientBoostingClassifier</td><td><code>max_iter</code>、<code>learning_rate</code>、<code>max_depth</code>、<code>min_samples_leaf</code>、<code>l2_regularization</code></td><td><code>max_iter</code>=[50, 500]；<code>learning_rate</code>=[0.01, 0.3]（对数）；<code>max_depth</code>=[3, 15]；<code>min_samples_leaf</code>=[5, 50]；<code>l2_regularization</code>=[1e-4, 10]（对数）</td></tr>
+                            <tr><td>SVC / SVR</td><td><code>C</code>、<code>kernel</code>；条件 <code>gamma</code>、<code>degree</code></td><td><code>C</code>=[1e-2, 100]（对数）；<code>kernel</code>={rbf, linear, poly, sigmoid}；rbf/poly/sigmoid 时 <code>gamma</code>={scale, auto}；poly 时 <code>degree</code>=[2, 5]</td></tr>
+                            <tr><td>LinearSVC</td><td><code>C</code>、<code>loss</code>、<code>max_iter</code></td><td><code>C</code>=[1e-3, 100]（对数）；<code>loss</code>={hinge, squared_hinge}；<code>max_iter</code>=[1000, 10000]</td></tr>
+                            <tr><td>LinearSVR</td><td><code>C</code>、<code>loss</code>、<code>max_iter</code></td><td><code>C</code>=[1e-3, 100]（对数）；<code>loss</code>={epsilon_insensitive, squared_epsilon_insensitive}；<code>max_iter</code>=[1000, 10000]</td></tr>
+                            <tr><td>NuSVC</td><td><code>nu</code>、<code>kernel</code>；条件 <code>gamma</code>、<code>degree</code></td><td><code>nu</code>=[0.1, 0.9]；核函数及条件参数同 SVC；不使用 <code>C</code></td></tr>
+                            <tr><td>NuSVR</td><td><code>nu</code>、<code>C</code>、<code>kernel</code>；条件 <code>gamma</code>、<code>degree</code></td><td><code>nu</code>=[0.1, 0.9]；<code>C</code>=[1e-2, 100]（对数）；核函数及条件参数同 SVR</td></tr>
+                            <tr><td>KNeighborsRegressor<br>KNeighborsClassifier</td><td><code>n_neighbors</code>、<code>weights</code>、<code>metric</code>、<code>p</code></td><td><code>n_neighbors</code>=[3, 30]；<code>weights</code>={uniform, distance}；<code>metric</code>={euclidean, manhattan, minkowski}；<code>p</code>=[1, 3]</td></tr>
+                            <tr><td>BaggingRegressor<br>BaggingClassifier</td><td><code>n_estimators</code>、<code>max_samples</code>、<code>max_features</code></td><td><code>n_estimators</code>=[10, 200]；<code>max_samples</code>=[0.5, 1]；<code>max_features</code>=[0.5, 1]</td></tr>
+                            <tr><td>PassiveAggressiveClassifier</td><td><code>C</code>、<code>max_iter</code>、<code>loss</code></td><td><code>C</code>=[1e-3, 10]（对数）；<code>max_iter</code>=[100, 2000]；<code>loss</code>={hinge, squared_hinge}</td></tr>
+                            <tr><td>PassiveAggressiveRegressor</td><td><code>C</code>、<code>max_iter</code>、<code>loss</code></td><td><code>C</code>=[1e-3, 10]（对数）；<code>max_iter</code>=[100, 2000]；<code>loss</code>={epsilon_insensitive, squared_epsilon_insensitive}</td></tr>
+                            <tr><td>Perceptron</td><td><code>alpha</code>、<code>penalty</code>、<code>max_iter</code>、<code>eta0</code></td><td><code>alpha</code>=[1e-5, 1]（对数）；<code>penalty</code>={l2, l1, elasticnet, None}；<code>max_iter</code>=[100, 2000]；<code>eta0</code>=[0.001, 1]（对数）</td></tr>
+                            <tr><td>OrthogonalMatchingPursuit</td><td><code>n_nonzero_coefs</code>、<code>fit_intercept</code></td><td><code>n_nonzero_coefs</code>=[1, 50]；<code>fit_intercept</code>={true, false}</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="docs-note">
+                    <div class="docs-note-title"><i class="bi bi-info-circle"></i>未显式注册的模型</div>
+                    <p>如果 LazyPredict 选中的模型不在上表中，平台会读取其构造参数，并按同名参数生成通用回退空间：<code>alpha</code>=[1e-4,100]（对数）、<code>C</code>=[1e-3,100]（对数）、<code>n_estimators</code>=[50,500]、<code>max_depth</code>=[3,30]、<code>learning_rate</code>=[0.001,0.3]（对数）、<code>min_samples_split</code>=[2,20]、<code>min_samples_leaf</code>=[1,10]、<code>max_iter</code>=[100,1000]、<code>n_neighbors</code>=[3,30]、<code>subsample</code>=[0.5,1]、<code>fit_intercept</code>={true,false}、<code>l1_ratio</code>=[0,1]。模型不包含这些同名参数时，不会凭空添加。</p>
+                </div>
+
+                {# ---------- 第 11 章 ---------- #}
+                <h2 id="sec-11"><span class="docs-chapno">11</span>延伸阅读</h2>
+                <p>本文只覆盖平台当前实现。若需要进一步了解交叉验证、特征工程、模型选择和调参方法，可以参考下面的开源书及其中文翻译。</p>
+
+                <div class="docs-link-card">
+                    <div class="link-icon"><i class="bi bi-book"></i></div>
+                    <div>
+                        <div class="link-title"><a href="https://github.com/abhishekkrthakur/approachingalmost" target="_blank" rel="noopener">Approaching (Almost) Any Machine Learning Problem</a></div>
+                        <div class="link-desc">作者 Abhishek Kr Thakur 是 Kaggle Grandmaster。全书以问题求解流程为主，覆盖交叉验证、特征工程、模型选择和调参，英文原版在 GitHub 开源。</div>
+                    </div>
+                </div>
+
+                <div class="docs-link-card">
+                    <div class="link-icon"><i class="bi bi-translate"></i></div>
+                    <div>
+                        <div class="link-title"><a href="https://ytzfhqs.github.io/AAAMLP-CN/" target="_blank" rel="noopener">AAAMLP 中文翻译</a></div>
+                        <div class="link-desc">同一本书的社区中文翻译版，可与英文原版对照阅读。</div>
+                    </div>
+                </div>
+
+            </article>
+        </div>
+
+        {# ============ 右侧目录 ============ #}
+        <div class="col-lg-3 d-none d-lg-block">
+            <nav class="docs-toc" id="docs-toc" aria-label="帮助文档目录">
+                <div class="toc-title">目录</div>
+                <ul>
+                    <li><a href="#sec-1">01 数据导入与探索</a></li>
+                    <li><a href="#sec-2">02 数据预处理</a></li>
+                    <li><a href="#sec-3">03 相关性与特征选择</a></li>
+                    <li><a href="#sec-4">04 监督学习：训练</a></li>
+                    <li><a href="#sec-5">05 超参调优</a></li>
+                    <li><a href="#sec-6">06 聚类分析</a></li>
+                    <li><a href="#sec-7">07 异常检测</a></li>
+                    <li><a href="#sec-8">08 降维可视化</a></li>
+                    <li><a href="#sec-9">09 在线预测</a></li>
+                    <li><a href="#sec-10">10 内置算法汇总</a></li>
+                    <li><a href="#sec-11">11 延伸阅读</a></li>
+                </ul>
+            </nav>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block js %}
+<script src="{% static 'plugins/katex/katex.min.js' %}"></script>
+<script src="{% static 'plugins/katex/contrib/auto-render.min.js' %}"></script>
+<script>
+// ===== KaTeX 自动渲染（行内 $..$ / 块级 $$..$$ ） =====
+(function () {
+    var target = document.getElementById('docs-content');
+    if (target && window.renderMathInElement) {
+        renderMathInElement(target, {
+            delimiters: [
+                { left: '$$', right: '$$', display: true },
+                { left: '$', right: '$', display: false }
+            ],
+            throwOnError: false,
+            ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        });
+    }
+})();
+
+// ===== 右侧目录 scrollspy：滚动时高亮当前章节 =====
+(function () {
+    var barH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--appbar-h')) || 56;
+    var links = Array.prototype.slice.call(document.querySelectorAll('#docs-toc a'));
+    var sections = [];
+    links.forEach(function (a) {
+        var id = a.getAttribute('href').slice(1);
+        var sec = document.getElementById(id);
+        if (sec) sections.push({ el: sec, link: a, top: 0 });
+    });
+    if (!sections.length) return;
+
+    function measure() {
+        sections.forEach(function (s) { s.top = s.el.getBoundingClientRect().top + window.scrollY; });
+    }
+
+    var ticking = false;
+    function update() {
+        var pos = window.scrollY + barH + 24;
+        var current = sections[0];
+        for (var i = 0; i < sections.length; i++) {
+            if (sections[i].top <= pos) current = sections[i];
+        }
+        sections.forEach(function (s) { s.link.classList.toggle('active', s === current); });
+        ticking = false;
+    }
+    measure();
+    window.addEventListener('scroll', function () {
+        if (!ticking) { window.requestAnimationFrame(update); ticking = true; }
+    }, { passive: true });
+    window.addEventListener('resize', measure, { passive: true });
+    Array.prototype.slice.call(document.querySelectorAll('#docs-content img')).forEach(function (img) {
+        if (!img.complete) img.addEventListener('load', function () { measure(); update(); }, { once: true });
+    });
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () { measure(); update(); });
+    }
+    update();
+})();
+</script>
+{% endblock %}

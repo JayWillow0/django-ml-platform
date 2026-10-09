@@ -1,0 +1,477 @@
+{% extends 'layout.html' %}
+
+{% block title %}数据管理 · MLPlatform{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">数据管理</li>
+{% endblock %}
+
+{% block css %}
+<style>
+    /* data_list 页面级补充样式（upload-zone 已在 app.css 定义） */
+    .dataset-actions { white-space: nowrap; }
+    .dataset-actions .btn { margin-right: 4px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# 上下文引导卡（signature）：用大白话告诉小白现在该做什么 #}
+<div class="guide-card fade-in">
+    <div class="guide-icon"><i class="bi bi-cloud-upload"></i></div>
+    <div class="guide-body">
+        <p class="guide-title"><span class="guide-step">第 1 步</span>上传你的数据</p>
+        <p class="guide-text">
+            机器学习模型从数据开始。上传一个 <strong>.csv / .xlsx</strong> 文件，系统会帮你看清它有几行几列、各列是什么类型、有没有缺失值。确认数据无误后，<strong>下一步</strong>是挑选用于训练的特征列。
+        </p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- 上传区 -->
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <span><i class="bi bi-upload header-icon me-2"></i>上传数据集</span>
+            </div>
+            <div class="card-body">
+                <div class="upload-zone" id="upload-zone">
+                    <span class="upload-icon"><i class="bi bi-cloud-arrow-up"></i></span>
+                    <p id="upload-text" style="margin:0 0 4px;">点击或拖拽文件到此处</p>
+                    <p style="font-size:12px;color:var(--gray-400);margin:0;">支持 .csv / .xlsx / .xls</p>
+                </div>
+                <!-- file-input 放在 upload-zone 外，避免点击事件冒泡 -->
+                <input type="file" id="file-input" accept=".csv,.xlsx,.xls" style="display:none;">
+                <button class="btn btn-ml w-100 mt-3" id="btn-upload" disabled>开始上传</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 数据集列表 -->
+    <div class="col-lg-8">
+        <div class="card h-100">
+            <div class="card-header">
+                <span><i class="bi bi-database header-icon me-2"></i>我的数据集</span>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>文件名</th>
+                                <th>行/列</th>
+                                <th>状态</th>
+                                <th>上传时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataset-tbody"></tbody>
+                    </table>
+                </div>
+                <p id="empty-tip" class="text-center text-muted py-5" style="display:none;">
+                    还没有数据集，先从左侧上传一个文件吧
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 数据探索模态框 -->
+<div class="modal fade" id="preview-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="preview-title">数据探索</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs" id="explore-tabs">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#tab-raw" data-bs-toggle="tab">
+                            <i class="bi bi-table me-1"></i>原始数据
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#tab-stats" data-bs-toggle="tab">
+                            <i class="bi bi-list-ol me-1"></i>统计描述
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#tab-dist" data-bs-toggle="tab">
+                            <i class="bi bi-bar-chart me-1"></i>分布图
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#tab-corr" data-bs-toggle="tab">
+                            <i class="bi bi-grid-3x3-gap me-1"></i>相关性
+                        </a>
+                    </li>
+                </ul>
+                <div class="tab-content mt-3">
+                    <div class="tab-pane fade show active" id="tab-raw">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered table-striped" id="preview-table">
+                                <thead id="preview-thead"></thead>
+                                <tbody id="preview-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="tab-stats">
+                        <div id="stats-content"></div>
+                    </div>
+                    <div class="tab-pane fade" id="tab-dist">
+                        <div class="mb-2 d-flex align-items-center gap-2">
+                            <label class="form-label mb-0">选择列</label>
+                            <select id="dist-col-select" class="form-select" style="width:auto;"></select>
+                        </div>
+                        <div id="dist-chart" style="width:100%;height:350px;"></div>
+                    </div>
+                    <div class="tab-pane fade" id="tab-corr">
+                        <div class="mb-2 d-flex align-items-center gap-2">
+                            <label class="form-label mb-0">色带</label>
+                            <select id="corr-palette-select" class="form-select" style="width:auto;">
+                                <option value="rdBu">RdBu</option>
+                                <option value="rdBuReverse">RdBu 反向</option>
+                                <option value="brandCool">附件冷色</option>
+                                <option value="grayScale">灰阶</option>
+                            </select>
+                        </div>
+                        <div id="corr-chart" style="width:100%;height:450px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block js %}
+<script>
+    var selectedFile = null;
+
+    // 点击上传区 → 触发 file-input
+    $('#upload-zone').click(function (e) {
+        e.preventDefault();
+        $('#file-input').click();
+    });
+
+    // file-input 选中文件
+    $('#file-input').change(function () {
+        var files = this.files;
+        if (files && files.length > 0) {
+            selectedFile = files[0];
+            $('#upload-text').text(selectedFile.name);
+            $('#btn-upload').prop('disabled', false);
+        }
+    });
+
+    // 拖拽上传
+    $('#upload-zone').on('dragover', function (e) { e.preventDefault(); e.stopPropagation(); $(this).addClass('dragover'); });
+    $('#upload-zone').on('dragleave', function (e) { e.preventDefault(); e.stopPropagation(); $(this).removeClass('dragover'); });
+    $('#upload-zone').on('drop', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        $(this).removeClass('dragover');
+        var files = e.originalEvent.dataTransfer.files;
+        if (files && files.length > 0) {
+            selectedFile = files[0];
+            $('#upload-text').text(selectedFile.name);
+            $('#btn-upload').prop('disabled', false);
+        }
+    });
+
+    // 上传
+    $('#btn-upload').click(function (e) {
+        e.preventDefault();
+        if (!selectedFile) return;
+        var fd = new FormData();
+        fd.append('file', selectedFile);
+        $('#btn-upload').prop('disabled', true).text('上传中...');
+        $.ajax({
+            url: '/api/datasets/upload/',
+            type: 'POST', data: fd, processData: false, contentType: false,
+            success: function (resp) {
+                if (resp.code === 0) {
+                    showAlert('上传成功', 'success');
+                    selectedFile = null;
+                    $('#upload-text').text('点击或拖拽文件到此处');
+                    $('#btn-upload').text('开始上传').prop('disabled', true);
+                    $('#file-input').val('');
+                    loadDatasets();
+                } else {
+                    showAlert(resp.msg);
+                    $('#btn-upload').prop('disabled', false).text('开始上传');
+                }
+            },
+            error: function () {
+                $('#btn-upload').prop('disabled', false).text('开始上传');
+                showAlert('上传失败，请重试');
+            }
+        });
+    });
+
+    // 加载数据集列表
+    function loadDatasets() {
+        $.get('/api/datasets/', function (resp) {
+            if (resp.code !== 0) return;
+            if (resp.data.length === 0) {
+                $('#dataset-tbody').html('');
+                $('#empty-tip').show();
+                return;
+            }
+            $('#empty-tip').hide();
+            var rows = '';
+            $.each(resp.data, function (i, d) {
+                var badge = '<span class="badge-status status-' + d.status + '">' + d.status_display + '</span>';
+                var nextHint = d.status === 'uploaded'
+                    ? ' <small class="text-muted">→ <a href="/preprocess/' + d.id + '/">配置特征</a></small>'
+                    : '';
+                rows += '<tr>' +
+                    '<td>' + d.file_name + nextHint + '</td>' +
+                    '<td class="text-tabular">' + d.row_count + ' × ' + d.col_count + '</td>' +
+                    '<td>' + badge + '</td>' +
+                    '<td class="text-muted">' + d.create_time + '</td>' +
+                    '<td class="dataset-actions">' +
+                    '<button class="btn btn-sm btn-outline-secondary btn-preview" data-id="' + d.id + '">预览</button> ' +
+                    (d.status === 'uploaded' ? '<a href="/preprocess/' + d.id + '/" class="btn btn-sm btn-ml">配置</a> ' : '') +
+                    (d.status === 'completed' ? '<a href="/preprocess/' + d.id + '/" class="btn btn-sm btn-outline-secondary">重新配置</a> ' : '') +
+                    '<button class="btn btn-sm btn-outline-danger btn-delete" data-id="' + d.id + '">删除</button>' +
+                    '</td></tr>';
+            });
+            $('#dataset-tbody').html(rows);
+        });
+    }
+
+    // 预览 → 数据探索
+    var exploreStats = null;
+    var exploreDistChart = null;
+    var exploreCorrChart = null;
+
+    $(document).on('click', '.btn-preview', function () {
+        var id = $(this).data('id');
+        // 并行请求预览和统计
+        $.when(
+            $.get('/api/datasets/' + id + '/preview/'),
+            $.get('/api/datasets/' + id + '/statistics/')
+        ).done(function (previewResp, statsResp) {
+            var pdata = previewResp[0].data;
+            if (previewResp[0].code !== 0) return;
+            var sdata = (statsResp[0].code === 0) ? statsResp[0].data : null;
+            exploreStats = sdata;
+
+            // Tab 1: 原始数据
+            $('#preview-title').text('数据探索 · ' + pdata.row_count + ' 行 × ' + pdata.columns.length + ' 列');
+            var cols = pdata.columns;
+            var thead = '<tr>';
+            $.each(cols, function (i, c) { thead += '<th>' + c + '</th>'; });
+            thead += '</tr>';
+            $('#preview-thead').html(thead);
+            var tbody = '';
+            $.each(pdata.preview, function (i, row) {
+                tbody += '<tr>';
+                $.each(cols, function (j, c) {
+                    tbody += '<td>' + (row[c] !== null ? row[c] : '<em class="text-muted">NaN</em>') + '</td>';
+                });
+                tbody += '</tr>';
+            });
+            $('#preview-tbody').html(tbody);
+
+            // Tab 2: 统计描述
+            if (sdata) {
+                var statsHtml = '';
+                // 数值列
+                if (sdata.numeric && Object.keys(sdata.numeric).length > 0) {
+                    statsHtml += '<h6 class="fw-semibold mb-2">数值列</h6>';
+                    statsHtml += '<table class="table table-sm table-bordered table-striped"><thead><tr><th>列名</th><th>均值</th><th>标准差</th><th>最小</th><th>25%</th><th>中位数</th><th>75%</th><th>最大</th><th>唯一值</th></tr></thead><tbody>';
+                    $.each(sdata.numeric, function (col, v) {
+                        statsHtml += '<tr><td>' + col + '</td>';
+                        statsHtml += '<td class="text-tabular">' + (v.mean !== null ? v.mean.toFixed(2) : '-') + '</td>';
+                        statsHtml += '<td class="text-tabular">' + (v.std !== null ? v.std.toFixed(2) : '-') + '</td>';
+                        statsHtml += '<td class="text-tabular">' + (v['min'] !== null ? v['min'].toFixed(2) : '-') + '</td>';
+                        statsHtml += '<td class="text-tabular">' + (v['25%'] !== null ? v['25%'].toFixed(2) : '-') + '</td>';
+                        statsHtml += '<td class="text-tabular">' + (v['50%'] !== null ? v['50%'].toFixed(2) : '-') + '</td>';
+                        statsHtml += '<td class="text-tabular">' + (v['75%'] !== null ? v['75%'].toFixed(2) : '-') + '</td>';
+                        statsHtml += '<td class="text-tabular">' + (v['max'] !== null ? v['max'].toFixed(2) : '-') + '</td>';
+                        statsHtml += '<td class="text-tabular">' + v.nunique + '</td></tr>';
+                    });
+                    statsHtml += '</tbody></table>';
+                }
+                // 分类列
+                if (sdata.categorical && Object.keys(sdata.categorical).length > 0) {
+                    statsHtml += '<h6 class="fw-semibold mb-2 mt-3">分类列</h6>';
+                    statsHtml += '<table class="table table-sm table-bordered table-striped"><thead><tr><th>列名</th><th>唯一值</th><th>最常见</th><th>频次</th><th>值分布 (Top 10)</th></tr></thead><tbody>';
+                    $.each(sdata.categorical, function (col, v) {
+                        statsHtml += '<tr><td>' + col + '</td>';
+                        statsHtml += '<td class="text-tabular">' + v.nunique + '</td>';
+                        statsHtml += '<td>' + v.top + '</td>';
+                        statsHtml += '<td class="text-tabular">' + v.top_freq + '</td>';
+                        var vals = [];
+                        if (v.values) {
+                            $.each(v.values, function (k, val) { vals.push(k + ': ' + val); });
+                        }
+                        statsHtml += '<td><small>' + vals.join(', ') + '</small></td></tr>';
+                    });
+                    statsHtml += '</tbody></table>';
+                }
+                // 缺失值
+                if (sdata.missing_pattern && sdata.missing_pattern.total_missing > 0) {
+                    var mp = sdata.missing_pattern;
+                    statsHtml += '<div class="alert alert-warning mt-3">';
+                    statsHtml += '<strong>缺失值:</strong> 共 ' + mp.total_missing + ' 个 (' + (mp.missing_ratio * 100).toFixed(1) + '%)';
+                    if (mp.by_column && Object.keys(mp.by_column).length > 0) {
+                        statsHtml += '<br><small>按列: ';
+                        $.each(mp.by_column, function (col, cnt) { statsHtml += col + '(' + cnt + ') '; });
+                        statsHtml += '</small>';
+                    }
+                    statsHtml += '</div>';
+                }
+                if (!statsHtml) {
+                    statsHtml = '<p class="text-muted">暂无统计信息</p>';
+                }
+                $('#stats-content').html(statsHtml);
+
+                // Tab 3: 分布图 — 填充列选择器
+                var allCols = [];
+                if (sdata.numeric) allCols = allCols.concat(Object.keys(sdata.numeric));
+                if (sdata.categorical) allCols = allCols.concat(Object.keys(sdata.categorical));
+                var optHtml = '';
+                $.each(allCols, function (i, c) { optHtml += '<option value="' + c + '">' + c + '</option>'; });
+                $('#dist-col-select').html(optHtml);
+
+                // Tab 4: 相关性 — 数据准备好，等 Tab 切换时再渲染（避免隐藏容器尺寸为 0）
+                if (!(sdata.correlation_matrix && sdata.correlation_matrix.columns && sdata.correlation_matrix.columns.length > 1)) {
+                    $('#corr-chart').html('<p class="text-muted text-center" style="padding:40px;">数值列不足，无法计算相关性</p>');
+                }
+            } else {
+                $('#stats-content').html('<p class="text-muted">统计信息加载失败</p>');
+                $('#dist-col-select').html('');
+                $('#corr-chart').html('');
+            }
+
+            // 重置到第一个 Tab，重置图表渲染标记
+            corrRendered = false;
+            distColInited = false;
+            // Bootstrap 5 tab API（替代 BS3 的 $.tab('show')）
+            var firstTabEl = document.querySelector('#explore-tabs .nav-link');
+            if (firstTabEl) bootstrap.Tab.getOrCreateInstance(firstTabEl).show();
+            // Bootstrap 5 modal API（替代 BS3 的 $.modal('show')）
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('preview-modal')).show();
+        });
+    });
+
+    // 分布图渲染
+    $('#dist-col-select').change(function () {
+        if (!exploreStats) return;
+        var col = $(this).val();
+        if (!col) return;
+
+        if (exploreDistChart) { exploreDistChart.dispose(); exploreDistChart = null; }
+        exploreDistChart = echarts.init(document.getElementById('dist-chart'));
+
+        // 数值列 → 直方图
+        if (exploreStats.numeric && exploreStats.numeric[col]) {
+            var v = exploreStats.numeric[col];
+            var bins = [v['min'], v['25%'], v['50%'], v['75%'], v['max']];
+            exploreDistChart.setOption(applyChartTheme({
+                title: { text: col + ' 分布', left: 'center' },
+                tooltip: { trigger: 'axis' },
+                xAxis: { type: 'category', data: ['Min', '25%', 'Median', '75%', 'Max'], name: col },
+                yAxis: { type: 'value', name: 'Value' },
+                series: [{
+                    type: 'bar', data: bins, itemStyle: { borderRadius: [4, 4, 0, 0] },
+                    label: { show: true, position: 'top', formatter: function (p) { return p.value !== null ? p.value.toFixed(2) : ''; } }
+                }]
+            }));
+        }
+        // 分类列 → 频率柱状图
+        else if (exploreStats.categorical && exploreStats.categorical[col]) {
+            var vals = exploreStats.categorical[col].values || {};
+            var names = Object.keys(vals);
+            var counts = Object.values(vals);
+            exploreDistChart.setOption(applyChartTheme({
+                title: { text: col + ' 频率分布', left: 'center' },
+                tooltip: { trigger: 'axis' },
+                xAxis: { type: 'category', data: names, axisLabel: { rotate: names.length > 5 ? 30 : 0 } },
+                yAxis: { type: 'value', name: 'Count' },
+                series: [{
+                    type: 'bar', data: counts, itemStyle: { borderRadius: [4, 4, 0, 0] },
+                    label: { show: true, position: 'top' }
+                }]
+            }));
+        }
+    });
+
+    // 相关性热力图渲染
+    function renderCorrelationHeatmap(corrData) {
+        if (exploreCorrChart) { exploreCorrChart.dispose(); exploreCorrChart = null; }
+        var cols = corrData.columns;
+        // 根据列数动态调整图表高度
+        var chartHeight = Math.max(350, cols.length * 55 + 120);
+        $('#corr-chart').css('height', chartHeight + 'px');
+        exploreCorrChart = echarts.init(document.getElementById('corr-chart'));
+        var matrix = corrData.matrix;
+        var data = [];
+        for (var i = 0; i < cols.length; i++) {
+            for (var j = 0; j < cols.length; j++) {
+                data.push([i, j, matrix[i][j]]);
+            }
+        }
+        var labelSize = cols.length <= 6 ? 11 : cols.length <= 15 ? 10 : 8;
+        exploreCorrChart.setOption(applyChartTheme({
+            title: { text: '特征相关性矩阵', left: 'center' },
+            tooltip: { formatter: function (p) { return cols[p.data[0]] + ' vs ' + cols[p.data[1]] + ': ' + p.data[2].toFixed(3); } },
+            grid: { top: 40, bottom: 80, left: 120, right: 30, containLabel: false },
+            xAxis: { type: 'category', data: cols, axisLabel: { rotate: cols.length > 6 ? 45 : 0, fontSize: labelSize, interval: 0 }, position: 'bottom' },
+            yAxis: { type: 'category', data: cols, axisLabel: { fontSize: labelSize, interval: 0 } },
+            visualMap: {
+                min: -1, max: 1, calculable: true, orient: 'horizontal', left: 'center', bottom: 0
+            },
+            series: [{
+                type: 'heatmap', data: data,
+                label: {
+                    show: cols.length <= 12, fontSize: cols.length <= 6 ? 11 : 9,
+                    formatter: function (p) { return p.data[2].toFixed(2); }
+                },
+                itemStyle: { borderWidth: 1, borderColor: '#fff' }
+            }]
+        }, { heatmapPalette: $('#corr-palette-select').val() || 'rdBu' }));
+    }
+
+    $('#corr-palette-select').change(function () {
+        if (corrRendered && exploreStats && exploreStats.correlation_matrix) {
+            renderCorrelationHeatmap(exploreStats.correlation_matrix);
+        }
+    });
+
+    // Tab 切换时渲染图表（解决隐藏容器尺寸为 0 的问题）
+    var corrRendered = false;
+    var distColInited = false;
+    $('a[data-bs-toggle="tab"]').on('shown.bs.tab', function (e) {
+        var target = $(e.target).attr('href');
+        if (target === '#tab-corr' && exploreStats && exploreStats.correlation_matrix && !corrRendered) {
+            if (exploreStats.correlation_matrix.columns && exploreStats.correlation_matrix.columns.length > 1) {
+                renderCorrelationHeatmap(exploreStats.correlation_matrix);
+                corrRendered = true;
+            }
+        }
+        if (target === '#tab-dist' && !distColInited && exploreStats) {
+            // 首次切到分布图时触发一次渲染
+            $('#dist-col-select').trigger('change');
+            distColInited = true;
+        }
+    });
+
+    // 删除
+    $(document).on('click', '.btn-delete', function () {
+        if (!confirm('确定删除该数据集？')) return;
+        var id = $(this).data('id');
+        $.post('/api/datasets/' + id + '/delete/', function (resp) {
+            if (resp.code === 0) { showAlert('已删除', 'success'); loadDatasets(); }
+            else { showAlert(resp.msg); }
+        });
+    });
+
+    // 初始化
+    loadDatasets();
+</script>
+{% endblock %}

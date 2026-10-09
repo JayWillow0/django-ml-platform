@@ -1,0 +1,175 @@
+{% extends 'layout.html' %}
+
+{% block title %}后台总览 · MLPlatform{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">后台总览</li>
+{% endblock %}
+
+{% block content %}
+
+<div class="guide-card fade-in">
+    <div class="guide-icon"><i class="bi bi-person-workspace"></i></div>
+    <div class="guide-body">
+        <p class="guide-title">后台总览</p>
+        <p class="guide-text">管理员专属。这里汇总了<strong>所有用户</strong>的训练任务和数据集，便于排查问题、统计用量。切换上方标签页可在「训练任务」与「数据集」之间浏览。</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <ul class="nav nav-tabs mb-0" id="dataTab">
+                <li class="nav-item">
+                    <a class="nav-link active" href="#tab-tasks" data-bs-toggle="tab">
+                        <i class="bi bi-mortarboard me-1"></i>训练任务
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#tab-datasets" data-bs-toggle="tab">
+                        <i class="bi bi-book me-1"></i>数据集
+                    </a>
+                </li>
+            </ul>
+            <div class="d-flex align-items-center">
+                <div id="task-pagination"></div>
+                <div id="dataset-pagination" style="display:none;"></div>
+            </div>
+        </div>
+
+        <div class="tab-content mt-3">
+            <!-- 训练任务表 -->
+            <div class="tab-pane fade show active" id="tab-tasks">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>任务名称</th>
+                                <th>所属用户</th>
+                                <th>数据集</th>
+                                <th>类型</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                                <th>更新时间</th>
+                            </tr>
+                        </thead>
+                        <tbody id="task-tbody"></tbody>
+                    </table>
+                    <p id="task-empty-tip" class="text-center text-muted">暂无训练任务</p>
+                </div>
+            </div>
+
+            <!-- 数据集表 -->
+            <div class="tab-pane fade" id="tab-datasets">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>文件名</th>
+                                <th>所属用户</th>
+                                <th>行数</th>
+                                <th>列数</th>
+                                <th>任务类型</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataset-tbody"></tbody>
+                    </table>
+                    <p id="dataset-empty-tip" class="text-center text-muted">暂无数据集</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block js %}
+<script>
+    var PAGE_SIZE = 10;
+    var curTaskPage = 1, curDatasetPage = 1;
+
+    function renderBadge(status, display) {
+        var cls = 'status-' + status;
+        return '<span class="badge-status ' + cls + '">' + display + '</span>';
+    }
+
+    // 分页条由全局 renderPagination 渲染（static/js/pagination.js）
+    function loadTasks(page) {
+        $.get('/api/backend/tasks/', { page: page, page_size: PAGE_SIZE }, function (resp) {
+            if (resp.code !== 0) return;
+            var d = resp.data;
+            curTaskPage = d.page;
+            if (!d.list || d.list.length === 0) {
+                $('#task-tbody').html('');
+                $('#task-empty-tip').show();
+                $('#task-pagination').empty();
+                return;
+            }
+            $('#task-empty-tip').hide();
+            var rows = '';
+            $.each(d.list, function (i, t) {
+                rows += '<tr>' +
+                    '<td class="text-tabular">' + t.id + '</td>' +
+                    '<td>' + t.task_name + '</td>' +
+                    '<td>' + t.admin_name + '</td>' +
+                    '<td>' + (t.dataset_name || '-') + '</td>' +
+                    '<td>' + (t.task_type_display || t.task_type) + '</td>' +
+                    '<td>' + renderBadge(t.status, t.status_display) + '</td>' +
+                    '<td>' + t.create_time + '</td>' +
+                    '<td>' + (t.update_time || '-') + '</td>' +
+                    '</tr>';
+            });
+            $('#task-tbody').html(rows);
+            renderPagination('#task-pagination', d.page, d.total_page, loadTasks);
+        });
+    }
+
+    function loadDatasets(page) {
+        $.get('/api/backend/datasets/', { page: page, page_size: PAGE_SIZE }, function (resp) {
+            if (resp.code !== 0) return;
+            var d = resp.data;
+            curDatasetPage = d.page;
+            if (!d.list || d.list.length === 0) {
+                $('#dataset-tbody').html('');
+                $('#dataset-empty-tip').show();
+                $('#dataset-pagination').empty();
+                return;
+            }
+            $('#dataset-empty-tip').hide();
+            var rows = '';
+            $.each(d.list, function (i, item) {
+                rows += '<tr>' +
+                    '<td class="text-tabular">' + item.id + '</td>' +
+                    '<td>' + item.file_name + '</td>' +
+                    '<td>' + item.admin_name + '</td>' +
+                    '<td class="text-tabular">' + item.row_count + '</td>' +
+                    '<td class="text-tabular">' + item.col_count + '</td>' +
+                    '<td>' + item.task_type + '</td>' +
+                    '<td>' + renderBadge(item.status, item.status_display) + '</td>' +
+                    '<td>' + item.create_time + '</td>' +
+                    '</tr>';
+            });
+            $('#dataset-tbody').html(rows);
+            renderPagination('#dataset-pagination', d.page, d.total_page, loadDatasets);
+        });
+    }
+
+    // 切换 tab 时显隐对应的分页栏（两个 tab 各自独立分页，分页栏统一放在 tab 栏右侧）
+    $('a[data-bs-toggle="tab"]', '#dataTab').on('shown.bs.tab', function (e) {
+        if (e.target.hash === '#tab-tasks') {
+            $('#task-pagination').show();
+            $('#dataset-pagination').hide();
+        } else {
+            $('#task-pagination').hide();
+            $('#dataset-pagination').show();
+        }
+    });
+
+    loadTasks(curTaskPage);
+    loadDatasets(curDatasetPage);
+</script>
+{% endblock %}

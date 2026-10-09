@@ -1,0 +1,32 @@
+# ============================================================
+# systemd 服务：Gunicorn（Web 进程）
+# ------------------------------------------------------------
+# 安装：
+#   sudo cp deploy/mysite-gunicorn.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now mysite-gunicorn
+#   sudo systemctl status mysite-gunicorn      # 查状态
+#   journalctl -u mysite-gunicorn -f           # 看日志
+#
+# 部署前必改：WorkingDirectory、ExecStart 中的路径、User/Group
+# （宝塔「Python 项目管理器」可替代本文件管理 gunicorn，二选一）
+# ============================================================
+[Unit]
+Description=mysite Gunicorn (Django WSGI)
+After=network.target mysqld.service redis.service
+
+[Service]
+# Type=exec：gunicorn 标准版不支持 sd_notify 协议，切勿用 notify
+# （不发 READY=1，systemd 会等 TimeoutStartSec 默认 90s 超时后判定启动失败）
+Type=exec
+User=www
+Group=www
+# 工作目录 = 项目根（含 manage.py 的目录）
+# Django 的 load_dotenv(BASE_DIR/.env) 据此找到 .env，无需 systemd 读 .env
+WorkingDirectory=/www/wwwroot/mysite
+ExecStart=/www/wwwroot/mysite/venv/bin/gunicorn mysite.wsgi:application -c /www/wwwroot/mysite/deploy/gunicorn_conf.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

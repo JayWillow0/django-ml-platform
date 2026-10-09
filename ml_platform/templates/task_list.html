@@ -1,0 +1,246 @@
+{% extends 'layout.html' %}
+
+{% block title %}任务追踪 · MLPlatform{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">任务追踪</li>
+{% endblock %}
+
+{% block content %}
+
+<div class="guide-card fade-in">
+    <div class="guide-icon"><i class="bi bi-clock-history"></i></div>
+    <div class="guide-body">
+        <p class="guide-title"><span class="guide-step">第 4 步</span>查看训练结果</p>
+        <p class="guide-text">这里列出你所有的训练任务。运行中的任务会每 5 秒自动刷新进度。点「详情」看完整信息；如果训练出错，详情里会用大白话告诉你<strong>错在哪、怎么办</strong>。完成的监督学习任务可直接进入下一步在线预测。</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span><i class="bi bi-list-task header-icon me-2"></i>任务追踪</span>
+    </div>
+    <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <div class="input-group input-group-sm" style="max-width:260px;">
+                <input type="text" id="task-search" class="form-control" placeholder="搜索任务名称...">
+                <button class="btn btn-outline-secondary" id="task-search-btn" type="button" aria-label="搜索">
+                    <i class="bi bi-search"></i>
+                </button>
+            </div>
+            <div id="task-pagination"></div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>任务名称</th>
+                        <th>数据集</th>
+                        <th>类型</th>
+                        <th>状态</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="task-tbody"></tbody>
+            </table>
+        </div>
+        <p id="empty-tip" class="text-center text-muted">暂无训练任务</p>
+    </div>
+</div>
+
+<!-- 详情模态框 -->
+<div class="modal fade" id="detail-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="detail-title">任务详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body" id="detail-body"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block js %}
+<script>
+var PAGE_SIZE = 10;
+var curPage = 1;
+var curKeyword = '';
+var pollTimers = {};
+
+function renderBadge(status, display){
+    var cls = 'status-' + status;
+    return '<span class="badge-status ' + cls + '">' + display + '</span>';
+}
+
+function loadTasks(page, keyword){
+    // 无参调用（初始化 / 轮询刷新 / 取消后）沿用当前页码与搜索词，保证不跳页、不丢搜索
+    if(page === undefined) page = curPage;
+    if(keyword === undefined) keyword = curKeyword;
+    curPage = page;
+    curKeyword = keyword;
+    $.get('/api/tasks/', { page: page, page_size: PAGE_SIZE, keyword: keyword }, function(resp){
+        if(resp.code !== 0) return;
+        var d = resp.data;
+        if(!d.list || d.list.length === 0){
+            $('#task-tbody').html('');
+            $('#empty-tip').show();
+            $('#task-pagination').empty();
+            return;
+        }
+        $('#empty-tip').hide();
+        var rows = '';
+        $.each(d.list, function(i, t){
+            rows += '<tr data-task-id="' + t.id + '">' +
+                '<td>' + t.task_name + '</td>' +
+                '<td>' + (t.dataset_name || '-') + '</td>' +
+                '<td>' + (t.task_type_display || t.task_type) + '</td>' +
+                '<td>' + renderBadge(t.status, t.status_display) + '</td>' +
+                '<td class="text-muted">' + t.create_time + '</td>' +
+                '<td>' +
+                    '<button class="btn btn-sm btn-outline-secondary btn-detail" data-id="' + t.id + '">详情</button> ' +
+                    (t.status === 'completed' && t.task_type === 'supervised' ? '<a href="/predict/" class="btn btn-sm btn-ml">预测</a> ' : '') +
+                    (t.status === 'running' ? '<button class="btn btn-sm btn-outline-danger btn-cancel" data-id="' + t.id + '" data-name="' + t.task_name + '">取消</button>' : '') +
+                '</td></tr>';
+        });
+        $('#task-tbody').html(rows);
+
+        // 对 running/pending 状态的任务启动轮询
+        $.each(d.list, function(i, t){
+            if((t.status === 'running' || t.status === 'pending') && !pollTimers[t.id]){
+                pollTimers[t.id] = setInterval(function(){
+                    $.get('/api/tasks/' + t.id + '/status/', function(resp){
+                        if(resp.code !== 0) return;
+                        var s = resp.data;
+                        var $tr = $('tr[data-task-id="' + t.id + '"]');
+                        var badge = renderBadge(s.status, s.status_display);
+                        // 队列信息
+                        if(s.queue_info){
+                            var q = s.queue_info;
+                            if(q.position){
+                                badge += ' <small class="text-muted">排队 #' + q.position + '</small>';
+                            }
+                            if(q.tasks_waiting){
+                                badge += ' <small class="text-muted">后方 ' + q.tasks_waiting + ' 个排队</small>';
+                            }
+                        }
+                        // 进度信息
+                        if(s.progress && s.progress.stage){
+                            badge += ' <small class="text-muted">' + s.progress.stage_display + ' ' + s.progress.percent + '%</small>';
+                        }
+                        $tr.find('td:eq(3)').html(badge);
+                        if(s.status !== 'running' && s.status !== 'pending'){
+                            clearInterval(pollTimers[t.id]);
+                            delete pollTimers[t.id];
+                            if(s.status === 'completed' || s.status === 'cancelled' || s.status === 'failed'){
+                                setTimeout(loadTasks, 500);
+                            }
+                        }
+                    });
+                }, 5000);
+            }
+        });
+
+        // 分页条（翻页时 renderPagination 调 loadTasks(p)，沿用 curKeyword）
+        renderPagination('#task-pagination', d.page, d.total_page, loadTasks);
+    });
+}
+
+// 搜索：回车或点按钮 → 回到第1页
+function doSearch(){
+    loadTasks(1, $('#task-search').val().trim());
+}
+$('#task-search').on('keydown', function(e){
+    if(e.keyCode === 13){ e.preventDefault(); doSearch(); }
+});
+$('#task-search-btn').on('click', doSearch);
+
+// 详情
+$(document).on('click', '.btn-detail', function(){
+    var id = $(this).data('id');
+    $.get('/api/tasks/' + id + '/', function(resp){
+        if(resp.code !== 0) return;
+        var d = resp.data;
+        var html = '<table class="table table-bordered table-sm">';
+        html += '<tr><th>任务名称</th><td>' + d.task_name + '</td></tr>';
+        html += '<tr><th>状态</th><td>' + renderBadge(d.status, d.status_display) + '</td></tr>';
+        html += '<tr><th>创建时间</th><td>' + d.create_time + '</td></tr>';
+        html += '<tr><th>更新时间</th><td>' + (d.update_time || '-') + '</td></tr>';
+        if(d.error_msg){
+            if(d.error_detail && d.error_detail.category){
+                var ed = d.error_detail;
+                html += '<tr><th>错误信息</th><td>';
+                html += '<div class="alert alert-danger" style="margin:0;padding:10px 15px;">';
+                html += '<h6 style="margin:0 0 8px;">' + (ed.icon || '') + ' ' + (ed.category_display || '错误') + '</h6>';
+                html += '<p style="margin:0 0 6px;">' + (ed.summary || d.error_msg) + '</p>';
+                html += '<hr style="margin:6px 0;">';
+                html += '<p class="text-info mb-0">💡 ' + (ed.suggestion || '请检查数据和配置后重试') + '</p>';
+                html += '</div>';
+                html += '<details style="margin-top:6px;"><summary class="text-muted small" style="cursor:pointer;">技术详情</summary>';
+                html += '<pre class="small text-muted" style="white-space:pre-wrap;max-height:150px;overflow:auto;">' + (d.error_msg || '') + '</pre>';
+                html += '</details>';
+                html += '</td></tr>';
+            } else {
+                html += '<tr><th>错误信息</th><td class="text-danger">' + d.error_msg + '</td></tr>';
+            }
+        }
+        if(d.results_summary){
+            html += '<tr><th>最佳模型</th><td>' + (d.results_summary.best_model || '-') + '</td></tr>';
+            html += '<tr><th>最佳得分</th><td>' + (d.results_summary.best_score !== null && d.results_summary.best_score !== undefined ? d.results_summary.best_score.toFixed(4) : '-') + '</td></tr>';
+            html += '<tr><th>特征数</th><td>' + (d.results_summary.feature_count || '-') + '</td></tr>';
+        }
+        if(d.available_charts && d.available_charts.length > 0){
+            html += '<tr><th>可用图表</th><td>' + d.available_charts.join(', ') + '</td></tr>';
+        }
+        html += '</table>';
+        if(d.status === 'completed'){
+            html += '<a href="/dashboard/?task_id=' + id + '" class="btn btn-ml">查看图表</a> ';
+            if(d.task_type === 'supervised'){
+                html += '<a href="/predict/" class="btn btn-ml">在线预测</a>';
+            }
+        }
+        $('#detail-title').text(d.task_name);
+        $('#detail-body').html(html);
+        // Bootstrap 5 modal API（替代 BS3 的 $.modal('show')）
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('detail-modal')).show();
+    });
+});
+
+// 取消任务
+$(document).on('click', '.btn-cancel', function(){
+    var id = $(this).data('id');
+    var name = $(this).data('name');
+    if(!confirm('确定要取消训练任务"' + name + '"吗？')) return;
+
+    var $btn = $(this);
+    $btn.prop('disabled', true).text('取消中...');
+
+    $.ajax({
+        url: '/api/tasks/' + id + '/cancel/',
+        type: 'POST',
+        contentType: 'application/json',
+        success: function(resp){
+            if(resp.code === 0){
+                if(pollTimers[id]){
+                    clearInterval(pollTimers[id]);
+                    delete pollTimers[id];
+                }
+                loadTasks();
+                showAlert('任务已取消', 'warning');
+            } else {
+                showAlert(resp.msg || '取消失败');
+                $btn.prop('disabled', false).text('取消');
+            }
+        },
+        error: function(){
+            showAlert('网络错误，请重试');
+            $btn.prop('disabled', false).text('取消');
+        }
+    });
+});
+
+loadTasks();
+</script>
+{% endblock %}

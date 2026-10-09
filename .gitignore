@@ -1,0 +1,53 @@
+# ============ 环境变量（含敏感信息，绝不上传）============
+.env
+.env.local
+.env.*.local
+
+# ============ Python ============
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# ============ 虚拟环境 ============
+.venv/
+venv/
+env/
+ENV/
+
+# ============ Django / Celery 运行时 ============
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+celery_broker.db
+celery_result.db
+*.db
+
+# ============ 用户上传 / ML 模型产物 ============
+media/
+
+# ============ collectstatic 产物（生产由 python manage.py collectstatic 生成）============
+staticfiles/
+
+# ============ 项目内部文档（私有/含敏感信息，不上传 GitHub）============
+PROJECT.md
+# 阿里云保姆级部署指南（本地操作手册，含服务器/部署细节，私有）
+deploy/aliyun-baota-guide.md
+
+# ============ IDE / 编辑器 ============
+.vscode/
+.idea/
+*.swp
+
+# ============ 操作系统 ============
+.DS_Store
+Thumbs.db
+
+# ===== 日志 / AI 工具缓存 =====
+.waylog/
+
+AGENTS.md
+
+/upload

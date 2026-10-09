@@ -1,0 +1,58 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MLPlatform · 登录</title>
+    <link rel="stylesheet" href="{% static 'plugins/bootstrap-5.3.3/css/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'plugins/bootstrap-icons/bootstrap-icons.css' %}">
+    <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}">
+    <link rel="stylesheet" href="{% static 'css/login.css' %}">
+</head>
+
+<body class="login-page">
+    <div class="login-card">
+        <div class="login-logo"><i class="bi bi-activity"></i></div>
+        <h1>MLPlatform</h1>
+        <p class="subtitle">Auto机器学习算法平台</p>
+
+        <form method="post" novalidate>
+            {% csrf_token %}
+            <div class="form-group">
+                <label class="field-label" for="id_username">用户名</label>
+                {{ form.username }}
+                <span class="field-error">{{ form.username.errors.0 }}</span>
+            </div>
+            <div class="form-group">
+                <label class="field-label" for="id_password">密码</label>
+                {{ form.password }}
+                <span class="field-error">{{ form.password.errors.0 }}</span>
+            </div>
+            <div class="form-group mb-0">
+                <label class="field-label" for="id_code">图片验证码</label>
+                <div class="captcha-row">
+                    <div class="captcha-input">
+                        {{ form.code }}
+                        <span class="field-error">{{ form.code.errors.0 }}</span>
+                    </div>
+                    <img id="image_code" class="captcha-img" src="/image/code/" alt="验证码" title="点击刷新">
+                </div>
+                <div class="captcha-hint">看不清？点击图片刷新</div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-submit">登 录</button>
+        </form>
+    </div>
+
+    <script src="{% static 'js/jquery-3.6.0.min.js' %}"></script>
+    <script>
+        // 验证码点击刷新（原逻辑保留）
+        $('#image_code').click(function () {
+            $(this).attr('src', '/image/code/?t=' + new Date().getTime());
+        });
+    </script>
+</body>
+
+</html>
